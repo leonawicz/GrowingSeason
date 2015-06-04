@@ -1,0 +1,57 @@
+---
+title: gs_eda.R
+output:
+  html_document:
+    toc: false
+    theme: cosmo
+    highlight: zenburn
+    keep_md: true
+---
+
+```{r knitr_setup, echo=FALSE}
+opts_chunk$set(cache=FALSE, eval=TRUE, echo=FALSE, tidy=TRUE, message=FALSE, warning=FALSE, dpi=300, fig.height=10.5, fig.width=10.5)
+library(printr)
+read_chunk("../../code/gs_eda.R")
+```
+
+##
+##
+## Growing season EDA [under development]
+
+Here are some tentative plots and tables related to initial explorations of the thaw degree days (TDD) for the Growing Season project.
+
+```{r setup2}
+```
+
+```{r plot_setup}
+```
+
+First, here is a map of the ecoregions currently in use.
+
+```{r plot_eco, fig.height=7, fig.width=12}
+```
+
+### Marginal distributions
+
+#### TDD by threshold and ecoregion
+
+This plot shows propability density fucntions (pdfs) for TDD colored by percent TDD threshold and paneled by ecoregion.
+These marginal densities integrate over space (map pixels) and time (years, 1982 - 2010).
+
+```{r plot_marginal_tdd_01a}
+```
+
+#### 10% TDD by ecoregion and year
+
+This plot shows the pdf specifically for the 10% TDD variable, by year and ecoregion.
+These marginal densities integrate over space only.
+Overlapping lines represent pdfs for individual years, 1982 - 2010.
+
+```{r plot_marginal_tdd_01b}
+```
+
+The tables below provide aggregate information by TDD threshold and ecoregion.
+Means and standard deviations are computed using all grid cells and all years for each combination of threshold and ecoregion.
+
+```{r tables_tdd_mean_sd}
+```
