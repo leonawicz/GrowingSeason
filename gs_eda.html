@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="pandoc" />
+
+
+
+<title>gs_eda.R</title>
+
+<script src="libs/jquery-1.11.0/jquery.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="libs/bootstrap-3.3.1/css/cosmo.min.css" rel="stylesheet" />
+<script src="libs/bootstrap-3.3.1/js/bootstrap.min.js"></script>
+<script src="libs/bootstrap-3.3.1/shim/html5shiv.min.js"></script>
+<script src="libs/bootstrap-3.3.1/shim/respond.min.js"></script>
+<style type="text/css">
+/* padding for bootstrap navbar */
+body {
+padding-top: 50px;
+padding-bottom: 40px;
+}
+/* offset scroll position for anchor links (for fixed navbar) */
+.section h2 {
+padding-top: 55px;
+margin-top: -55px;
+}
+.section h3 {
+padding-top: 55px;
+margin-top: -55px;
+}
+/* don't use link color in navbar */
+.dropdown-menu>li>a {
+color: black;
+}
+/* some padding for disqus */
+#disqus_thread {
+margin-top: 45px;
+}
+p {
+  text-align: justify;
+}
+img.centered {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+<link rel="stylesheet" href="libs/font-awesome-4.1.0/css/font-awesome.min.css"/>
+
+
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-46129458-3', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+</head>
+
+<body>
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+code {
+  color: inherit;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+img { 
+  max-width:100%; 
+  height: auto; 
+}
+</style>
+<div class="container-fluid main-container">
+
+<div class="navbar navbar-default navbar-fixed-top">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-responsive-collapse">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">Growing Season</a>
+      </div>
+      <div class="navbar-collapse collapse navbar-responsive-collapse">
+        <ul class="nav navbar-nav">
+          <li class="dropdown">
+            <a href="eda" class="dropdown-toggle" data-toggle="dropdown">EDA <b class="caret"></b></a>
+            <ul class="dropdown-menu">
+              <li><a href="gs_eda.html">EDA WIP</a></li>
+            </ul>
+
+          <li class="dropdown">
+            <a href="" class="dropdown-toggle" data-toggle="dropdown"> <b class="caret"></b></a>
+            <ul class="dropdown-menu">
+              <li><a href=""></a></li>
+            </ul>
+
+          <li class="dropdown">
+            <a href="" class="dropdown-toggle" data-toggle="dropdown"> <b class="caret"></b></a>
+            <ul class="dropdown-menu">
+              <li><a href=""></a></li>
+            </ul>
+
+          <li><a href="http://leonawicz.github.io">All Projects</a></li>
+        </ul>
+        <ul class="nav navbar-nav navbar-right">
+          <a class="btn btn-link" href="https://github.com/leonawicz/GrowingSeason">
+            <i class="fa fa-github fa-lg"></i>
+            Github
+          </a>
+        </ul>
+      </div><!--/.nav-collapse -->
+    </div>
+  </div>
+
+<div id="header">
+<h1 class="title">gs_eda.R</h1>
+</div>
+
+
+<div id="section" class="section level2">
+<h2></h2>
+</div>
+<div id="section-1" class="section level2">
+<h2></h2>
+</div>
+<div id="growing-season-eda-under-development" class="section level2">
+<h2>Growing season EDA [under development]</h2>
+<p>Here are some tentative plots and tables related to initial explorations of the thaw degree days (TDD) for the Growing Season project.</p>
+<p>First, here is a map of the ecoregions currently in use.</p>
+<p><img src="gs_eda_files/figure-html/plot_eco-1.png" /></p>
+<div id="marginal-distributions" class="section level3">
+<h3>Marginal distributions</h3>
+<div id="tdd-by-threshold-and-ecoregion" class="section level4">
+<h4>TDD by threshold and ecoregion</h4>
+<p>This plot shows propability density fucntions (pdfs) for TDD colored by percent TDD threshold and paneled by ecoregion. These marginal densities integrate over space (map pixels) and time (years, 1982 - 2010).</p>
+<p><img src="gs_eda_files/figure-html/plot_marginal_tdd_01a-1.png" /></p>
+</div>
+<div id="tdd-by-ecoregion-and-year" class="section level4">
+<h4>10% TDD by ecoregion and year</h4>
+<p>This plot shows the pdf specifically for the 10% TDD variable, by year and ecoregion. These marginal densities integrate over space only. Overlapping lines represent pdfs for individual years, 1982 - 2010.</p>
+<p><img src="gs_eda_files/figure-html/plot_marginal_tdd_01b-1.png" /></p>
+<p>The tables below provide aggregate information by TDD threshold and ecoregion. Means and standard deviations are computed using all grid cells and all years for each combination of threshold and ecoregion.</p>
+<table>
+<caption>5 % Thaw Degree Days.</caption>
+<thead>
+<tr class="header">
+<th align="left">Region</th>
+<th align="right">Mean</th>
+<th align="right">SD</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Aleutian Meadows</td>
+<td align="right">107</td>
+<td align="right">29</td>
+</tr>
+<tr class="even">
+<td align="left">Coastal Rainforests</td>
+<td align="right">120</td>
+<td align="right">36</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Taiga</td>
+<td align="right">133</td>
+<td align="right">12</td>
+</tr>
+<tr class="even">
+<td align="left">Pacific Mountains Transition</td>
+<td align="right">135</td>
+<td align="right">9</td>
+</tr>
+<tr class="odd">
+<td align="left">Intermontane Boreal</td>
+<td align="right">136</td>
+<td align="right">9</td>
+</tr>
+<tr class="even">
+<td align="left">Alaska Range Transition</td>
+<td align="right">137</td>
+<td align="right">14</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Tundra</td>
+<td align="right">148</td>
+<td align="right">10</td>
+</tr>
+<tr class="even">
+<td align="left">Coast Mountains Transition</td>
+<td align="right">151</td>
+<td align="right">13</td>
+</tr>
+<tr class="odd">
+<td align="left">Arctic Tundra</td>
+<td align="right">153</td>
+<td align="right">8</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>10 % Thaw Degree Days.</caption>
+<thead>
+<tr class="header">
+<th align="left">Region</th>
+<th align="right">Mean</th>
+<th align="right">SD</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Aleutian Meadows</td>
+<td align="right">132</td>
+<td align="right">19</td>
+</tr>
+<tr class="even">
+<td align="left">Coastal Rainforests</td>
+<td align="right">139</td>
+<td align="right">27</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Taiga</td>
+<td align="right">145</td>
+<td align="right">10</td>
+</tr>
+<tr class="even">
+<td align="left">Pacific Mountains Transition</td>
+<td align="right">145</td>
+<td align="right">8</td>
+</tr>
+<tr class="odd">
+<td align="left">Intermontane Boreal</td>
+<td align="right">146</td>
+<td align="right">8</td>
+</tr>
+<tr class="even">
+<td align="left">Alaska Range Transition</td>
+<td align="right">148</td>
+<td align="right">12</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Tundra</td>
+<td align="right">158</td>
+<td align="right">9</td>
+</tr>
+<tr class="even">
+<td align="left">Coast Mountains Transition</td>
+<td align="right">160</td>
+<td align="right">12</td>
+</tr>
+<tr class="odd">
+<td align="left">Arctic Tundra</td>
+<td align="right">161</td>
+<td align="right">7</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>15 % Thaw Degree Days.</caption>
+<thead>
+<tr class="header">
+<th align="left">Region</th>
+<th align="right">Mean</th>
+<th align="right">SD</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Aleutian Meadows</td>
+<td align="right">147</td>
+<td align="right">14</td>
+</tr>
+<tr class="even">
+<td align="left">Coastal Rainforests</td>
+<td align="right">151</td>
+<td align="right">22</td>
+</tr>
+<tr class="odd">
+<td align="left">Intermontane Boreal</td>
+<td align="right">153</td>
+<td align="right">8</td>
+</tr>
+<tr class="even">
+<td align="left">Pacific Mountains Transition</td>
+<td align="right">154</td>
+<td align="right">8</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Taiga</td>
+<td align="right">154</td>
+<td align="right">9</td>
+</tr>
+<tr class="even">
+<td align="left">Alaska Range Transition</td>
+<td align="right">157</td>
+<td align="right">11</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Tundra</td>
+<td align="right">165</td>
+<td align="right">9</td>
+</tr>
+<tr class="even">
+<td align="left">Arctic Tundra</td>
+<td align="right">166</td>
+<td align="right">7</td>
+</tr>
+<tr class="odd">
+<td align="left">Coast Mountains Transition</td>
+<td align="right">167</td>
+<td align="right">11</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>20 % Thaw Degree Days.</caption>
+<thead>
+<tr class="header">
+<th align="left">Region</th>
+<th align="right">Mean</th>
+<th align="right">SD</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Aleutian Meadows</td>
+<td align="right">159</td>
+<td align="right">11</td>
+</tr>
+<tr class="even">
+<td align="left">Intermontane Boreal</td>
+<td align="right">160</td>
+<td align="right">7</td>
+</tr>
+<tr class="odd">
+<td align="left">Coastal Rainforests</td>
+<td align="right">161</td>
+<td align="right">18</td>
+</tr>
+<tr class="even">
+<td align="left">Pacific Mountains Transition</td>
+<td align="right">162</td>
+<td align="right">7</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Taiga</td>
+<td align="right">162</td>
+<td align="right">9</td>
+</tr>
+<tr class="even">
+<td align="left">Alaska Range Transition</td>
+<td align="right">164</td>
+<td align="right">10</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Tundra</td>
+<td align="right">171</td>
+<td align="right">9</td>
+</tr>
+<tr class="even">
+<td align="left">Arctic Tundra</td>
+<td align="right">172</td>
+<td align="right">8</td>
+</tr>
+<tr class="odd">
+<td align="left">Coast Mountains Transition</td>
+<td align="right">173</td>
+<td align="right">10</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+<!-- some extra javascript for older browsers -->
+<script type="text/javascript" src="libs/polyfill.js"></script>
+<script>
+  // manage active state of menu based on current page
+  $(document).ready(function () {
+  
+    // active menu
+    href = window.location.pathname
+    href = href.substr(href.lastIndexOf('/') + 1)
+    $('a[href="' + href + '"]').parent().addClass('active');
+    
+    // manage active menu header
+    if (href.startsWith('authoring_'))
+      $('a[href="' + 'authoring' + '"]').parent().addClass('active');
+    else if (href.endsWith('_format.html'))
+      $('a[href="' + 'formats' + '"]').parent().addClass('active');
+    else if (href.startsWith('developer_'))
+      $('a[href="' + 'developer' + '"]').parent().addClass('active');
+	  
+  });
+</script>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+$(document).ready(function () {
+  $('tr.header').parent('thead').parent('table').addClass('table table-condensed');
+});
+
+</script>
+
+
+</body>
+</html>
