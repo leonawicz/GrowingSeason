@@ -54,7 +54,16 @@ d <- lapply(list(tdd05, tdd10, tdd15, tdd20), make_TDD_df, extractBy=eco_shp, pr
 lapply(1:length(d), function(i, x, pct) x[[i]][, Threshold := pct[i]], x=d, pct=paste0(c("05",10,15,20), "pct"))
 d <- rbindlist(d)
 setcolorder(d, c("Region", "Year", "Threshold", "TDD"))
-d %>% group_by(Threshold, Region) %>% summarise(Mean=mean(TDD, na.rm=T), SD=sd(TDD, na.rm=T)) -> d.stats
+d %>% group_by(Threshold, Region) %>%
+    summarise(Min=min(TDD, na.rm=T),
+              Pct05=quantile(TDD, 0.05, na.rm=T),
+              Pct10=quantile(TDD, 0.10, na.rm=T),
+              Pct25=quantile(TDD, 0.25, na.rm=T),
+              Pct50=quantile(TDD, 0.5, na.rm=T),
+              Pct75=quantile(TDD, 0.75, na.rm=T),
+              Pct90=quantile(TDD, 0.90, na.rm=T),
+              Pct95=quantile(TDD, 0.95, na.rm=T),
+              Max=max(TDD, na.rm=T), Mean=mean(TDD, na.rm=T), SD=sd(TDD, na.rm=T)) -> d.stats
 save(d, d.stats, sos, ecomask, yrs, cbpal, file="data.RData")
 
 # @knitr setup2
