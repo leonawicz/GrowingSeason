@@ -141,19 +141,30 @@ img {
 <div id="section-1" class="section level2">
 <h2></h2>
 </div>
-<div id="introduction" class="section level2">
-<h2>Introduction</h2>
-<p>The following sections provide exploratory plots and tables relating to thaw degree days (TDD) for the Growing Season project.</p>
-<p>First, here is a map of the ecoregions currently in use for the project.</p>
-<p><img src="index_files/figure-html/plot_eco-1.png" /></p>
-<div id="marginal-distributions" class="section level3">
-<h3>Marginal distributions</h3>
-<div id="tdd-by-threshold-and-ecoregion" class="section level4">
-<h4>TDD by threshold and ecoregion</h4>
-<p>This plot shows probability density fucntions (pdfs) for TDD colored by percent TDD threshold and paneled by ecoregion. These marginal densities integrate over space (map pixels) and time (years, 1982 - 2010).</p>
-<p><img src="index_files/figure-html/plot_marginal_tdd_01a-1.png" /></p>
-<p>Subsequent sections look more closely at TDD in space and time, separately and in combination.</p>
+<div id="growing-season-eda-space-time" class="section level2">
+<h2>Growing season EDA: Space-Time</h2>
+<p>The plots below explore patterns in TDD through space and time.</p>
+<div id="tdd-spatial-distributions-by-ecoregion-and-year-threshold" class="section level3">
+<h3>TDD spatial distributions by ecoregion and year | threshold</h3>
+<p>This is similar to the first plot of TDD pdfs by ecoregion and threshold except that there is not integration across time. Separate, overlapping annual density curves are shown. This plot shows annual pdfs specifically for the 10% TDD variable. Overlapping lines represent pdfs for individual years, 1982 - 2010.</p>
+<p><img src="gs_eda3_files/figure-html/plot_tdd_02a-1.png" /></p>
+<p>The above plot shows clear inter-annual differences in TDD distribution shape, scale, and location, but it is difficult to parse visually. The following plot shows annual spatial distributions as boxplots with superimposed point observations, ordered by year. This plot reveals clearly not only the differences between ecoregions suggested by the previous plot, but also annual changes in TDD distributions within ecoregions.</p>
+<p><img src="gs_eda3_files/figure-html/plot_tdd_02b-1.png" /></p>
 </div>
+<div id="tdd-spatial-distributions-by-year-threshold-and-ecoregion" class="section level3">
+<h3>TDD spatial distributions by year | threshold and ecoregion</h3>
+<p>In the next plot, two ecoregion cases are highlighted for direct comparison of annual spatial TDD distributions for each TDD threshold. Note the substantial difference in variability between ecoregions, independent of time, in addition to differences in means and how these may appear to correlate during some sub-periods and not others.</p>
+<p><img src="gs_eda3_files/figure-html/plot_tdd_02c-1.png" /></p>
+</div>
+<div id="time-series-by-sampled-locations-threshold-and-ecoregion" class="section level3">
+<h3>Time series by sampled locations | threshold and ecoregion</h3>
+<p>Continuing with the comparison of these two regions, rather than showing spatial distributional summaries as before, the time series of TDD below is now broken out by lines representing the continuity of TDD through time at sampled pixels within each ecoregion.</p>
+<p><img src="gs_eda3_files/figure-html/plot_tdd_02d-1.png" /></p>
+</div>
+<div id="spatial-standard-deviation-by-ecoregion-and-year" class="section level3">
+<h3>Spatial standard deviation by ecoregion and year</h3>
+<p>Focusing again specifically on the 10% TDD threshold, this heat map displays the standard deviation in 10% TDD by ecoregion and year.</p>
+<p><img src="gs_eda3_files/figure-html/plot_tdd_02e-1.png" /></p>
 </div>
 </div>
 
