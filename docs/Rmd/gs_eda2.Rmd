@@ -1,0 +1,33 @@
+---
+output:
+  html_document:
+    toc: false
+    theme: cosmo
+    highlight: zenburn
+    keep_md: true
+---
+
+```{r knitr_setup, echo=FALSE}
+opts_chunk$set(cache=FALSE, eval=TRUE, echo=FALSE, tidy=TRUE, message=FALSE, warning=FALSE, dpi=300, fig.height=10.5, fig.width=10.5)
+library(printr)
+read_chunk("../../code/gs_eda.R")
+```
+
+##
+##
+## Growing season EDA: Time
+
+```{r setup2}
+```
+
+### Marginal distributions
+
+The tables below provide aggregate information by TDD threshold and year.
+Means, standard deviations, and order statistics are computed using all grid cells across all ecoregions for each combination of threshold and year.
+These are annual threshold-specific spatial distributions of TDD integrated across ecoregions.
+This means that all ecoregions have been pooled.
+Each ecoregion's influence on the marginal spatial distribution is proportional to its size.
+
+```{r tables_marginal_tdd2}
+```
+

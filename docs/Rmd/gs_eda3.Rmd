@@ -1,0 +1,70 @@
+---
+output:
+  html_document:
+    toc: false
+    theme: cosmo
+    highlight: zenburn
+    keep_md: true
+---
+
+```{r knitr_setup, echo=FALSE}
+opts_chunk$set(cache=TRUE, eval=TRUE, echo=FALSE, tidy=TRUE, message=FALSE, warning=FALSE, dpi=300, fig.height=7.5, fig.width=10.5)
+library(printr)
+read_chunk("../../code/gs_eda.R")
+```
+
+##
+##
+## Growing season EDA: Space-Time
+
+The plots below explore patterns in TDD through space and time.
+
+```{r setup2}
+```
+
+### TDD spatial distributions by ecoregion and year | threshold
+
+This is similar to the first plot of TDD pdfs by ecoregion and threshold
+except that there is not integration across time.
+Separate, overlapping annual density curves are shown.
+This plot shows annual pdfs specifically for the 10% TDD variable.
+Overlapping lines represent pdfs for individual years, 1982 - 2010.
+
+```{r plot_tdd_02a}
+```
+
+The above plot shows clear inter-annual differences in TDD distribution shape, scale, and location,
+but it is difficult to parse visually.
+The following plot shows annual spatial distributions as boxplots with superimposed point observations,
+ordered by year.
+This plot reveals clearly not only the differences between ecoregions suggested by the previous plot,
+but also annual changes in TDD distributions within ecoregions.
+
+```{r plot_tdd_02b}
+```
+
+### TDD spatial distributions by year | threshold and ecoregion
+
+In the next plot, two ecoregion cases are highlighted for direct comparison of annual spatial TDD distributions for each TDD threshold.
+Note the substantial difference in variability between ecoregions, independent of time,
+in addition to differences in means and how these may appear to correlate during some sub-periods and not others.
+
+```{r plot_tdd_02c}
+```
+
+### Time series by sampled locations | threshold and ecoregion
+
+Continuing with the comparison of these two regions,
+rather than showing spatial distributional summaries as before,
+the time series of TDD below is now broken out by lines representing the continuity of TDD through time at sampled pixels within each ecoregion.
+
+```{r plot_tdd_02d}
+```
+
+### Spatial standard deviation by ecoregion and year
+
+Focusing again specifically on the 10% TDD threshold,
+this heat map displays the standard deviation in 10% TDD by ecoregion and year.
+
+```{r plot_tdd_02e, fig.height=10, fig.width=15}
+```

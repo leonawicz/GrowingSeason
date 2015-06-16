@@ -1,0 +1,43 @@
+---
+output:
+  html_document:
+    toc: false
+    theme: cosmo
+    highlight: zenburn
+    keep_md: true
+---
+
+```{r knitr_setup, echo=FALSE}
+opts_chunk$set(cache=FALSE, eval=TRUE, echo=FALSE, tidy=TRUE, message=FALSE, warning=FALSE, dpi=300, fig.height=7.5, fig.width=10.5)
+library(printr)
+read_chunk("../../code/gs_eda.R")
+```
+
+##
+##
+## Introduction
+
+The following sections provide exploratory plots and tables relating to thaw degree days (TDD) for the Growing Season project.
+
+```{r setup2}
+```
+
+```{r plot_setup}
+```
+
+First, here is a map of the ecoregions currently in use for the project.
+
+```{r plot_eco, fig.height=7, fig.width=12}
+```
+
+### Marginal distributions
+
+#### TDD by threshold and ecoregion
+
+This plot shows probability density fucntions (pdfs) for TDD colored by percent TDD threshold and paneled by ecoregion.
+These marginal densities integrate over space (map pixels) and time (years, 1982 - 2010).
+
+```{r plot_marginal_tdd_01a}
+```
+
+Subsequent sections look more closely at TDD in space and time, separately and in combination.
