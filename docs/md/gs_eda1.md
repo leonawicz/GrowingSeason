@@ -10,7 +10,7 @@
 ### Marginal distributions
 
 The tables below provide aggregate information by TDD threshold and ecoregion.
-Means and order statistics are computed using all grid cells and all years for each combination of threshold and ecoregion.
+Means, standard deviations, and order statistics are computed using all grid cells and all years for each combination of threshold and ecoregion.
 These are threshold- and ecoregion-specific spatial distributions of TDD integrated across time.
 
 
