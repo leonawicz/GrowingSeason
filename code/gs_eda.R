@@ -53,7 +53,12 @@ make_TDD_df <- function(d, extractBy, projectTo=NULL, resampleTo=NULL, maskTo=re
 d <- lapply(list(tdd05, tdd10, tdd15, tdd20), make_TDD_df, extractBy=eco_shp, projectTo=sos, resampleTo=ecomask)
 lapply(1:length(d), function(i, x, pct) x[[i]][, Threshold := pct[i]], x=d, pct=paste0(c("05",10,15,20), "pct"))
 d <- rbindlist(d)
-setcolorder(d, c("Region", "Year", "Threshold", "TDD"))
+tmp <- with(d, paste(Region, Threshold, Year))
+tmp <- as.numeric(lapply(split(tmp, tmp), length))
+setorder(d, Region, Threshold, Year)
+d[, Obs := unlist(lapply(tmp, function(x) 1:x))]
+setcolorder(d, c("Region", "Year", "Threshold", "Obs", "TDD"))
+
 d %>% group_by(Threshold, Region) %>%
     summarise(Min=min(TDD, na.rm=T),
               Pct05=quantile(TDD, 0.05, na.rm=T),
@@ -64,7 +69,20 @@ d %>% group_by(Threshold, Region) %>%
               Pct90=quantile(TDD, 0.90, na.rm=T),
               Pct95=quantile(TDD, 0.95, na.rm=T),
               Max=max(TDD, na.rm=T), Mean=mean(TDD, na.rm=T), SD=sd(TDD, na.rm=T)) -> d.stats
-save(d, d.stats, sos, ecomask, yrs, cbpal, file="data.RData")
+              
+d %>% group_by(Threshold, Year) %>%
+    summarise(Min=min(TDD, na.rm=T),
+              Pct05=quantile(TDD, 0.05, na.rm=T),
+              Pct10=quantile(TDD, 0.10, na.rm=T),
+              Pct25=quantile(TDD, 0.25, na.rm=T),
+              Pct50=quantile(TDD, 0.5, na.rm=T),
+              Pct75=quantile(TDD, 0.75, na.rm=T),
+              Pct90=quantile(TDD, 0.90, na.rm=T),
+              Pct95=quantile(TDD, 0.95, na.rm=T),
+              Max=max(TDD, na.rm=T), Mean=mean(TDD, na.rm=T), SD=sd(TDD, na.rm=T)) -> d.stats2
+
+d %>% group_by(Region, Threshold, Year) %>% summarise(SD=sd(TDD, na.rm=T)) -> d.hm
+save(d, d.stats, d.stats2, d.hm, sos, ecomask, yrs, cbpal, file="data.RData")
 
 # @knitr setup2
 setwd("C:/github/GrowingSeason/workspaces")
@@ -93,22 +111,17 @@ revRasterTheme <- function (pch = 19, cex = 0.7, region=cbpal, ...){
     theme
 }
 
-# ggplot setup
-g <- ggplot(data=d, aes(x=TDD)) + theme(legend.position="bottom")
-
 # @knitr plot_eco
 levelplot(ecomask, main="AK level 2 ecoregions", par.settings=revRasterTheme, scales=list(draw=FALSE), contour=F, margin=F, at=at.vals, colorkey=colkey)
 
 # @knitr plot_marginal_tdd_01a
-# tdd marginal distributions (across years) by threshold and ecoregion
-(p01a <- g + geom_line(aes(colour=Threshold), stat="density", size=1) + facet_wrap(~ Region))
+# TDD marginal spatial distributions (across years) by threshold and ecoregion
+(p01a <- ggplot(data=d, aes(x=TDD, colour=Threshold)) + theme(legend.position="bottom") +
+    geom_line(stat="density", size=1) + facet_wrap(~ Region))
 
-# @knitr plot_marginal_tdd_01b
-# tdd distributions by ecoregion and year | threshold = 10%
-dsub <- d[Threshold=="10pct",]
-(p02a <- g + geom_line(data=dsub, aes(x=TDD, group=Year), stat="density", alpha=0.5) + facet_wrap(~ Region))
-
-# @knitr tables_tdd_mean_sd
+#### SPACE ####
+# @knitr tables_marginal_tdd1
+# tdd marginal spatial distribution quantiles (across years) by threshold and ecoregion
 setorder(d.stats, Threshold, Mean)
 subset(d.stats, Threshold=="05pct", -1) %>% knitr::kable(digits=0, caption="5 % Thaw Degree Days.")
 subset(d.stats, Threshold=="10pct", -1) %>% knitr::kable(digits=0, caption="10 % Thaw Degree Days.")
@@ -118,3 +131,57 @@ subset(d.stats, Threshold=="20pct", -1) %>% knitr::kable(digits=0, caption="20 %
 #d.stats %>% filter(Threshold=="10pct") %>% arrange(Mean)
 #d.stats %>% filter(Threshold=="15pct") %>% arrange(Mean)
 #d.stats %>% filter(Threshold=="20pct") %>% arrange(Mean)
+
+#### TIME ####
+# @knitr tables_marginal_tdd2
+# tdd marginal spatial distribution quantiles (across ecoregions) by threshold and year
+subset(d.stats2, Threshold=="05pct", -1) %>% knitr::kable(digits=0, caption="5 % Thaw Degree Days.")
+subset(d.stats2, Threshold=="10pct", -1) %>% knitr::kable(digits=0, caption="10 % Thaw Degree Days.")
+subset(d.stats2, Threshold=="15pct", -1) %>% knitr::kable(digits=0, caption="15 % Thaw Degree Days.")
+subset(d.stats2, Threshold=="20pct", -1) %>% knitr::kable(digits=0, caption="20 % Thaw Degree Days.")
+#d.stats %>% filter(Threshold=="05pct") %>% arrange(Mean)
+#d.stats %>% filter(Threshold=="10pct") %>% arrange(Mean)
+#d.stats %>% filter(Threshold=="15pct") %>% arrange(Mean)
+#d.stats %>% filter(Threshold=="20pct") %>% arrange(Mean)
+
+#### SPACE-TIME ####
+# @knitr plot_tdd_02a
+# Spatial distributions | time
+# TDD spatial distributions by ecoregion and year | threshold = X%
+dsub <- d[Threshold=="10pct",]
+(p02a <- ggplot(data=dsub, aes(x=TDD, group=Year)) + theme(legend.position="bottom") +
+    xlab("10% TDD") +
+    geom_line(stat="density", alpha=0.5) + facet_wrap(~ Region))
+
+# @knitr plot_tdd_02b
+# TDD spatial distributions by ecoregion and year | threshold = X%
+(p02b <- ggplot(data=dsub, aes(x=factor(Year), y=TDD)) +
+    theme(legend.position="bottom", axis.ticks.x = element_blank(), axis.text.x = element_blank()) +
+    xlab("1982 - 2010") + ylab("10% TDD") +
+    geom_boxplot(fill="white", outlier.size=NA) + geom_jitter(alpha=0.01) + facet_wrap(~ Region))
+
+# @knitr plot_tdd_02c
+# TDD spatial distributions by year | threshold = X% and region = Y
+dsub <- d[Region %in% c("Pacific Mountains Transition", "Coastal Rainforests"),]
+(p02c <- ggplot(data=dsub, aes(x=factor(Year), y=TDD, fill=Region, colour=Region)) +
+    theme(legend.position="bottom", axis.ticks.x = element_blank(), axis.text.x = element_blank()) + guides(colour=guide_legend(override.aes=list(alpha=1))) +
+    xlab("1982 - 2010") + ylab("10% TDD") +
+    geom_boxplot(fill="white", position=position_dodge(width=0.9), outlier.size=NA) + geom_point(alpha=0.01, position=position_jitterdodge(dodge.width=0.9)) + facet_wrap(~ Threshold))
+
+# @knitr plot_tdd_02d
+# Time series by sampled locations | threshold = X% and region = Y
+(p02d <- ggplot(data=dsub[Obs <=1000,], aes(x=Year, y=TDD, group=interaction(Region, Threshold, Obs), fill=Region, colour=Region)) +
+    theme(legend.position="bottom", axis.ticks.x = element_blank(), axis.text.x = element_blank()) + guides(colour=guide_legend(override.aes=list(alpha=1))) +
+    xlab("1982 - 2010") + ylab("10% TDD") +
+    geom_line(stat="smooth", alpha=0.1) + facet_wrap(~ Threshold))
+
+# @knitr plot_tdd_02e
+# Bivariate space-time heatmap, spatial SD by ecoregion and year
+#d %>% filter(Threshold=="10pct") %>% group_by(Region, Year) %>% summarise(SD=sd(TDD, na.rm=T)) %>% group_by() %>% mutate(RelVar=SD/max(SD)) -> dsub
+dsub <- subset(d.hm, Threshold=="10pct")
+(p02e <- ggplot(dsub, aes(x=factor(Year), y=Region)) +
+    theme(legend.position="bottom", axis.ticks.x = element_blank()) +
+    xlab("Year") + ylab("Ecoregion") +
+    geom_tile(aes(fill=SD), colour = "white") +
+    scale_fill_gradient(low = "white", high = "steelblue", limit = c(-0, max(dsub$SD)), name="10% TDD SD") +
+    geom_text(aes(factor(Year), Region, label=round(SD, 1)), color="black", size=4))
