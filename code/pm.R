@@ -34,14 +34,14 @@ proj.title <- "Growing Season"
 proj.menu <- c("EDA", "", "", "All Projects")
 
 proj.submenu <- list(
-	c("EDA WIP"),
+	c("Introduction", "Space", "Time", "Space-Time"),
 	c(""),
 	c(""),
 	c("empty")
 )
 
 proj.files <- list(
-	c("gs_eda.html"),
+	c("index.html", "gs_eda1.html", "gs_eda2.html"),
 	c(""),
 	c(""),
 	c("http://leonawicz.github.io")
