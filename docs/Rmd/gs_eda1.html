@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="pandoc" />
+
+
+
+<title></title>
+
+<script src="libs/jquery-1.11.0/jquery.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="libs/bootstrap-3.3.1/css/cosmo.min.css" rel="stylesheet" />
+<script src="libs/bootstrap-3.3.1/js/bootstrap.min.js"></script>
+<script src="libs/bootstrap-3.3.1/shim/html5shiv.min.js"></script>
+<script src="libs/bootstrap-3.3.1/shim/respond.min.js"></script>
+<style type="text/css">
+/* padding for bootstrap navbar */
+body {
+padding-top: 50px;
+padding-bottom: 40px;
+}
+/* offset scroll position for anchor links (for fixed navbar) */
+.section h2 {
+padding-top: 55px;
+margin-top: -55px;
+}
+.section h3 {
+padding-top: 55px;
+margin-top: -55px;
+}
+/* don't use link color in navbar */
+.dropdown-menu>li>a {
+color: black;
+}
+/* some padding for disqus */
+#disqus_thread {
+margin-top: 45px;
+}
+p {
+  text-align: justify;
+}
+img.centered {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+<link rel="stylesheet" href="libs/font-awesome-4.1.0/css/font-awesome.min.css"/>
+
+
+
+
+</head>
+
+<body>
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+code {
+  color: inherit;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+img { 
+  max-width:100%; 
+  height: auto; 
+}
+</style>
+<div class="container-fluid main-container">
+
+<div class="navbar navbar-default navbar-fixed-top">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-responsive-collapse">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">Growing Season</a>
+      </div>
+      <div class="navbar-collapse collapse navbar-responsive-collapse">
+        <ul class="nav navbar-nav">
+          <li class="dropdown">
+            <a href="eda" class="dropdown-toggle" data-toggle="dropdown">EDA <b class="caret"></b></a>
+            <ul class="dropdown-menu">
+              <li><a href="index.html">Introduction</a></li>
+              <li><a href="gs_eda1.html">Space</a></li>
+              <li><a href="gs_eda2.html">Time</a></li>
+              <li><a href="gs_eda3.html">Space-Time</a></li>
+            </ul>
+
+          <li class="dropdown">
+            <a href="" class="dropdown-toggle" data-toggle="dropdown"> <b class="caret"></b></a>
+            <ul class="dropdown-menu">
+              <li><a href=""></a></li>
+            </ul>
+
+          <li class="dropdown">
+            <a href="" class="dropdown-toggle" data-toggle="dropdown"> <b class="caret"></b></a>
+            <ul class="dropdown-menu">
+              <li><a href=""></a></li>
+            </ul>
+
+          <li><a href="http://leonawicz.github.io">All Projects</a></li>
+        </ul>
+        <ul class="nav navbar-nav navbar-right">
+          <a class="btn btn-link" href="https://github.com/leonawicz/GrowingSeason">
+            <i class="fa fa-github fa-lg"></i>
+            Github
+          </a>
+        </ul>
+      </div><!--/.nav-collapse -->
+    </div>
+  </div>
+
+
+
+<div id="section" class="section level2">
+<h2></h2>
+</div>
+<div id="section-1" class="section level2">
+<h2></h2>
+</div>
+<div id="growing-season-eda-space" class="section level2">
+<h2>Growing season EDA: Space</h2>
+<div id="marginal-distributions" class="section level3">
+<h3>Marginal distributions</h3>
+<p>The tables below provide aggregate information by TDD threshold and ecoregion. Means and order statistics are computed using all grid cells and all years for each combination of threshold and ecoregion. These are threshold- and ecoregion-specific spatial distributions of TDD integrated across time.</p>
+<table>
+<caption>5 % Thaw Degree Days.</caption>
+<thead>
+<tr class="header">
+<th align="left">Region</th>
+<th align="right">Min</th>
+<th align="right">Pct05</th>
+<th align="right">Pct10</th>
+<th align="right">Pct25</th>
+<th align="right">Pct50</th>
+<th align="right">Pct75</th>
+<th align="right">Pct90</th>
+<th align="right">Pct95</th>
+<th align="right">Max</th>
+<th align="right">Mean</th>
+<th align="right">SD</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Aleutian Meadows</td>
+<td align="right">21</td>
+<td align="right">46</td>
+<td align="right">62</td>
+<td align="right">91</td>
+<td align="right">114</td>
+<td align="right">129</td>
+<td align="right">138</td>
+<td align="right">143</td>
+<td align="right">164</td>
+<td align="right">107</td>
+<td align="right">29</td>
+</tr>
+<tr class="even">
+<td align="left">Coastal Rainforests</td>
+<td align="right">20</td>
+<td align="right">47</td>
+<td align="right">63</td>
+<td align="right">100</td>
+<td align="right">128</td>
+<td align="right">145</td>
+<td align="right">160</td>
+<td align="right">169</td>
+<td align="right">220</td>
+<td align="right">120</td>
+<td align="right">36</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Taiga</td>
+<td align="right">29</td>
+<td align="right">114</td>
+<td align="right">120</td>
+<td align="right">126</td>
+<td align="right">134</td>
+<td align="right">141</td>
+<td align="right">146</td>
+<td align="right">151</td>
+<td align="right">181</td>
+<td align="right">133</td>
+<td align="right">12</td>
+</tr>
+<tr class="even">
+<td align="left">Pacific Mountains Transition</td>
+<td align="right">119</td>
+<td align="right">122</td>
+<td align="right">124</td>
+<td align="right">128</td>
+<td align="right">134</td>
+<td align="right">141</td>
+<td align="right">146</td>
+<td align="right">150</td>
+<td align="right">170</td>
+<td align="right">135</td>
+<td align="right">9</td>
+</tr>
+<tr class="odd">
+<td align="left">Intermontane Boreal</td>
+<td align="right">111</td>
+<td align="right">123</td>
+<td align="right">125</td>
+<td align="right">129</td>
+<td align="right">135</td>
+<td align="right">142</td>
+<td align="right">148</td>
+<td align="right">151</td>
+<td align="right">178</td>
+<td align="right">136</td>
+<td align="right">9</td>
+</tr>
+<tr class="even">
+<td align="left">Alaska Range Transition</td>
+<td align="right">25</td>
+<td align="right">117</td>
+<td align="right">121</td>
+<td align="right">128</td>
+<td align="right">137</td>
+<td align="right">146</td>
+<td align="right">154</td>
+<td align="right">159</td>
+<td align="right">214</td>
+<td align="right">137</td>
+<td align="right">14</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Tundra</td>
+<td align="right">33</td>
+<td align="right">133</td>
+<td align="right">137</td>
+<td align="right">142</td>
+<td align="right">146</td>
+<td align="right">155</td>
+<td align="right">160</td>
+<td align="right">164</td>
+<td align="right">183</td>
+<td align="right">148</td>
+<td align="right">10</td>
+</tr>
+<tr class="even">
+<td align="left">Coast Mountains Transition</td>
+<td align="right">112</td>
+<td align="right">129</td>
+<td align="right">133</td>
+<td align="right">142</td>
+<td align="right">150</td>
+<td align="right">159</td>
+<td align="right">167</td>
+<td align="right">172</td>
+<td align="right">220</td>
+<td align="right">151</td>
+<td align="right">13</td>
+</tr>
+<tr class="odd">
+<td align="left">Arctic Tundra</td>
+<td align="right">124</td>
+<td align="right">140</td>
+<td align="right">144</td>
+<td align="right">148</td>
+<td align="right">154</td>
+<td align="right">159</td>
+<td align="right">162</td>
+<td align="right">164</td>
+<td align="right">181</td>
+<td align="right">153</td>
+<td align="right">8</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>10 % Thaw Degree Days.</caption>
+<thead>
+<tr class="header">
+<th align="left">Region</th>
+<th align="right">Min</th>
+<th align="right">Pct05</th>
+<th align="right">Pct10</th>
+<th align="right">Pct25</th>
+<th align="right">Pct50</th>
+<th align="right">Pct75</th>
+<th align="right">Pct90</th>
+<th align="right">Pct95</th>
+<th align="right">Max</th>
+<th align="right">Mean</th>
+<th align="right">SD</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Aleutian Meadows</td>
+<td align="right">44</td>
+<td align="right">93</td>
+<td align="right">108</td>
+<td align="right">125</td>
+<td align="right">135</td>
+<td align="right">146</td>
+<td align="right">152</td>
+<td align="right">156</td>
+<td align="right">177</td>
+<td align="right">132</td>
+<td align="right">19</td>
+</tr>
+<tr class="even">
+<td align="left">Coastal Rainforests</td>
+<td align="right">42</td>
+<td align="right">85</td>
+<td align="right">100</td>
+<td align="right">123</td>
+<td align="right">144</td>
+<td align="right">157</td>
+<td align="right">169</td>
+<td align="right">177</td>
+<td align="right">221</td>
+<td align="right">139</td>
+<td align="right">27</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Taiga</td>
+<td align="right">108</td>
+<td align="right">130</td>
+<td align="right">133</td>
+<td align="right">138</td>
+<td align="right">146</td>
+<td align="right">151</td>
+<td align="right">156</td>
+<td align="right">160</td>
+<td align="right">197</td>
+<td align="right">145</td>
+<td align="right">10</td>
+</tr>
+<tr class="even">
+<td align="left">Pacific Mountains Transition</td>
+<td align="right">129</td>
+<td align="right">132</td>
+<td align="right">135</td>
+<td align="right">139</td>
+<td align="right">146</td>
+<td align="right">151</td>
+<td align="right">156</td>
+<td align="right">159</td>
+<td align="right">182</td>
+<td align="right">145</td>
+<td align="right">8</td>
+</tr>
+<tr class="odd">
+<td align="left">Intermontane Boreal</td>
+<td align="right">123</td>
+<td align="right">133</td>
+<td align="right">135</td>
+<td align="right">140</td>
+<td align="right">145</td>
+<td align="right">151</td>
+<td align="right">156</td>
+<td align="right">159</td>
+<td align="right">201</td>
+<td align="right">146</td>
+<td align="right">8</td>
+</tr>
+<tr class="even">
+<td align="left">Alaska Range Transition</td>
+<td align="right">60</td>
+<td align="right">130</td>
+<td align="right">133</td>
+<td align="right">140</td>
+<td align="right">147</td>
+<td align="right">156</td>
+<td align="right">163</td>
+<td align="right">167</td>
+<td align="right">218</td>
+<td align="right">148</td>
+<td align="right">12</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Tundra</td>
+<td align="right">137</td>
+<td align="right">144</td>
+<td align="right">147</td>
+<td align="right">151</td>
+<td align="right">157</td>
+<td align="right">163</td>
+<td align="right">170</td>
+<td align="right">174</td>
+<td align="right">192</td>
+<td align="right">158</td>
+<td align="right">9</td>
+</tr>
+<tr class="even">
+<td align="left">Coast Mountains Transition</td>
+<td align="right">127</td>
+<td align="right">141</td>
+<td align="right">145</td>
+<td align="right">152</td>
+<td align="right">160</td>
+<td align="right">167</td>
+<td align="right">175</td>
+<td align="right">180</td>
+<td align="right">221</td>
+<td align="right">160</td>
+<td align="right">12</td>
+</tr>
+<tr class="odd">
+<td align="left">Arctic Tundra</td>
+<td align="right">131</td>
+<td align="right">149</td>
+<td align="right">152</td>
+<td align="right">156</td>
+<td align="right">161</td>
+<td align="right">165</td>
+<td align="right">168</td>
+<td align="right">171</td>
+<td align="right">205</td>
+<td align="right">161</td>
+<td align="right">7</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>15 % Thaw Degree Days.</caption>
+<thead>
+<tr class="header">
+<th align="left">Region</th>
+<th align="right">Min</th>
+<th align="right">Pct05</th>
+<th align="right">Pct10</th>
+<th align="right">Pct25</th>
+<th align="right">Pct50</th>
+<th align="right">Pct75</th>
+<th align="right">Pct90</th>
+<th align="right">Pct95</th>
+<th align="right">Max</th>
+<th align="right">Mean</th>
+<th align="right">SD</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Aleutian Meadows</td>
+<td align="right">66</td>
+<td align="right">122</td>
+<td align="right">131</td>
+<td align="right">141</td>
+<td align="right">149</td>
+<td align="right">157</td>
+<td align="right">164</td>
+<td align="right">167</td>
+<td align="right">182</td>
+<td align="right">147</td>
+<td align="right">14</td>
+</tr>
+<tr class="even">
+<td align="left">Coastal Rainforests</td>
+<td align="right">67</td>
+<td align="right">110</td>
+<td align="right">120</td>
+<td align="right">138</td>
+<td align="right">154</td>
+<td align="right">165</td>
+<td align="right">176</td>
+<td align="right">182</td>
+<td align="right">283</td>
+<td align="right">151</td>
+<td align="right">22</td>
+</tr>
+<tr class="odd">
+<td align="left">Intermontane Boreal</td>
+<td align="right">134</td>
+<td align="right">141</td>
+<td align="right">144</td>
+<td align="right">148</td>
+<td align="right">153</td>
+<td align="right">159</td>
+<td align="right">163</td>
+<td align="right">165</td>
+<td align="right">227</td>
+<td align="right">153</td>
+<td align="right">8</td>
+</tr>
+<tr class="even">
+<td align="left">Pacific Mountains Transition</td>
+<td align="right">137</td>
+<td align="right">141</td>
+<td align="right">144</td>
+<td align="right">148</td>
+<td align="right">154</td>
+<td align="right">159</td>
+<td align="right">164</td>
+<td align="right">166</td>
+<td align="right">189</td>
+<td align="right">154</td>
+<td align="right">8</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Taiga</td>
+<td align="right">124</td>
+<td align="right">141</td>
+<td align="right">144</td>
+<td align="right">148</td>
+<td align="right">154</td>
+<td align="right">160</td>
+<td align="right">164</td>
+<td align="right">168</td>
+<td align="right">218</td>
+<td align="right">154</td>
+<td align="right">9</td>
+</tr>
+<tr class="even">
+<td align="left">Alaska Range Transition</td>
+<td align="right">101</td>
+<td align="right">140</td>
+<td align="right">144</td>
+<td align="right">149</td>
+<td align="right">156</td>
+<td align="right">164</td>
+<td align="right">170</td>
+<td align="right">174</td>
+<td align="right">226</td>
+<td align="right">157</td>
+<td align="right">11</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Tundra</td>
+<td align="right">146</td>
+<td align="right">152</td>
+<td align="right">154</td>
+<td align="right">158</td>
+<td align="right">164</td>
+<td align="right">170</td>
+<td align="right">177</td>
+<td align="right">182</td>
+<td align="right">201</td>
+<td align="right">165</td>
+<td align="right">9</td>
+</tr>
+<tr class="even">
+<td align="left">Arctic Tundra</td>
+<td align="right">138</td>
+<td align="right">155</td>
+<td align="right">158</td>
+<td align="right">162</td>
+<td align="right">167</td>
+<td align="right">170</td>
+<td align="right">174</td>
+<td align="right">177</td>
+<td align="right">228</td>
+<td align="right">166</td>
+<td align="right">7</td>
+</tr>
+<tr class="odd">
+<td align="left">Coast Mountains Transition</td>
+<td align="right">136</td>
+<td align="right">150</td>
+<td align="right">154</td>
+<td align="right">160</td>
+<td align="right">166</td>
+<td align="right">173</td>
+<td align="right">180</td>
+<td align="right">185</td>
+<td align="right">222</td>
+<td align="right">167</td>
+<td align="right">11</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>20 % Thaw Degree Days.</caption>
+<thead>
+<tr class="header">
+<th align="left">Region</th>
+<th align="right">Min</th>
+<th align="right">Pct05</th>
+<th align="right">Pct10</th>
+<th align="right">Pct25</th>
+<th align="right">Pct50</th>
+<th align="right">Pct75</th>
+<th align="right">Pct90</th>
+<th align="right">Pct95</th>
+<th align="right">Max</th>
+<th align="right">Mean</th>
+<th align="right">SD</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Aleutian Meadows</td>
+<td align="right">108</td>
+<td align="right">141</td>
+<td align="right">146</td>
+<td align="right">153</td>
+<td align="right">160</td>
+<td align="right">167</td>
+<td align="right">173</td>
+<td align="right">177</td>
+<td align="right">193</td>
+<td align="right">159</td>
+<td align="right">11</td>
+</tr>
+<tr class="even">
+<td align="left">Intermontane Boreal</td>
+<td align="right">142</td>
+<td align="right">149</td>
+<td align="right">151</td>
+<td align="right">155</td>
+<td align="right">160</td>
+<td align="right">165</td>
+<td align="right">169</td>
+<td align="right">172</td>
+<td align="right">234</td>
+<td align="right">160</td>
+<td align="right">7</td>
+</tr>
+<tr class="odd">
+<td align="left">Coastal Rainforests</td>
+<td align="right">93</td>
+<td align="right">127</td>
+<td align="right">136</td>
+<td align="right">150</td>
+<td align="right">163</td>
+<td align="right">173</td>
+<td align="right">182</td>
+<td align="right">187</td>
+<td align="right">222</td>
+<td align="right">161</td>
+<td align="right">18</td>
+</tr>
+<tr class="even">
+<td align="left">Pacific Mountains Transition</td>
+<td align="right">146</td>
+<td align="right">150</td>
+<td align="right">152</td>
+<td align="right">157</td>
+<td align="right">162</td>
+<td align="right">166</td>
+<td align="right">171</td>
+<td align="right">174</td>
+<td align="right">195</td>
+<td align="right">162</td>
+<td align="right">7</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Taiga</td>
+<td align="right">137</td>
+<td align="right">150</td>
+<td align="right">152</td>
+<td align="right">156</td>
+<td align="right">161</td>
+<td align="right">167</td>
+<td align="right">172</td>
+<td align="right">175</td>
+<td align="right">240</td>
+<td align="right">162</td>
+<td align="right">9</td>
+</tr>
+<tr class="even">
+<td align="left">Alaska Range Transition</td>
+<td align="right">122</td>
+<td align="right">149</td>
+<td align="right">152</td>
+<td align="right">157</td>
+<td align="right">164</td>
+<td align="right">170</td>
+<td align="right">176</td>
+<td align="right">179</td>
+<td align="right">250</td>
+<td align="right">164</td>
+<td align="right">10</td>
+</tr>
+<tr class="odd">
+<td align="left">Bering Tundra</td>
+<td align="right">151</td>
+<td align="right">159</td>
+<td align="right">161</td>
+<td align="right">165</td>
+<td align="right">170</td>
+<td align="right">176</td>
+<td align="right">184</td>
+<td align="right">189</td>
+<td align="right">212</td>
+<td align="right">171</td>
+<td align="right">9</td>
+</tr>
+<tr class="even">
+<td align="left">Arctic Tundra</td>
+<td align="right">147</td>
+<td align="right">160</td>
+<td align="right">163</td>
+<td align="right">167</td>
+<td align="right">172</td>
+<td align="right">175</td>
+<td align="right">179</td>
+<td align="right">182</td>
+<td align="right">265</td>
+<td align="right">172</td>
+<td align="right">8</td>
+</tr>
+<tr class="odd">
+<td align="left">Coast Mountains Transition</td>
+<td align="right">144</td>
+<td align="right">158</td>
+<td align="right">161</td>
+<td align="right">167</td>
+<td align="right">173</td>
+<td align="right">179</td>
+<td align="right">185</td>
+<td align="right">190</td>
+<td align="right">229</td>
+<td align="right">173</td>
+<td align="right">10</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<!-- some extra javascript for older browsers -->
+<script type="text/javascript" src="libs/polyfill.js"></script>
+<script>
+  // manage active state of menu based on current page
+  $(document).ready(function () {
+  
+    // active menu
+    href = window.location.pathname
+    href = href.substr(href.lastIndexOf('/') + 1)
+    $('a[href="' + href + '"]').parent().addClass('active');
+    
+    // manage active menu header
+    if (href.startsWith('authoring_'))
+      $('a[href="' + 'authoring' + '"]').parent().addClass('active');
+    else if (href.endsWith('_format.html'))
+      $('a[href="' + 'formats' + '"]').parent().addClass('active');
+    else if (href.startsWith('developer_'))
+      $('a[href="' + 'developer' + '"]').parent().addClass('active');
+	  
+  });
+</script>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+$(document).ready(function () {
+  $('tr.header').parent('thead').parent('table').addClass('table table-condensed');
+});
+
+</script>
+
+
+</body>
+</html>
