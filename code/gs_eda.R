@@ -4,7 +4,7 @@
 
 #### Script author:  Matthew Leonawicz ####
 #### Maintainted by: Matthew Leonawicz ####
-#### Last updated:   06/03/2015        ####
+#### Last updated:   06/16/2015        ####
 
 # @knitr setup
 setwd("C:/github/GrowingSeason/workspaces")
