@@ -4,7 +4,7 @@
 
 #### Script author:  Matthew Leonawicz ####
 #### Maintainted by: Matthew Leonawicz ####
-#### Last updated:   06/16/2015        ####
+#### Last updated:   06/25/2015        ####
 
 # @knitr setup
 setwd("C:/github/GrowingSeason/workspaces")
@@ -30,34 +30,33 @@ tdd20 <- dropLayer(brick("../data/pct20_tdd_spring_1979_2010.tif"), 1:3)
 
 # Alaska ecoregion level two mask
 shpDir <- "C:/github/DataExtraction/data/shapefiles"
-eco_shp <- shapefile(file.path(shpDir, "AK_ecoregions/akecoregions"))
+eco_shp <- shapefile(file.path(shpDir, "AK_ecoregions/akecoregions.shp"))
 eco_shp <- spTransform(eco_shp, CRS(projection(sos)))
 eco_shp <- unionSpatialPolygons(eco_shp, eco_shp@data$LEVEL_2)
 eco_IDs <- sapply(slot(eco_shp, "polygons"), function(x) slot(x, "ID"))
 ecomask <- rasterize(eco_shp, sos)
 
 # @knitr data_prep
-make_TDD_df <- function(d, extractBy, projectTo=NULL, resampleTo=NULL, maskTo=resampleTo){
+make_TDD_df <- function(d, extractBy, y){
     d[d <= 1] <- NA
-    if(!is.null(projectTo)) d <- projectRaster(d, sos)
-    if(!is.null(resampleTo)) d <- resample(d, ecomask, method="bilinear")
-    if(!is.null(maskTo)) d <- mask(d, ecomask)
-    e <- extract(d, eco_shp)
-    d <- rbindlist(lapply(1:length(e),
-        function(i, x, years, eco){
-            data.table(Region=eco[i], Year=rep(years, each=nrow(x[[i]])), TDD=as.numeric(x[[i]]))
-        }, x=e, years=yrs, eco=eco_IDs))
-    d
+    d %>% projectRaster(y) %>% resample(y, method="bilinear") %>% mask(y) %>% extract(extractBy, cellnumbers=TRUE) -> d
+    s <- extract(y, extractBy)
+    d <- rbindlist(lapply(1:length(d),
+        function(i, tdd, sos, years, eco, shp, mask){
+            xy <- xyFromCell(mask, as.numeric(tdd[[i]][,1]))
+            data.table(Region=eco[i], Year=rep(years, each=nrow(tdd[[i]])), SOS=as.numeric(sos[[i]]), TDD=as.numeric(tdd[[i]][,-1]), x=xy[,1], y=xy[,2])
+        }, tdd=d, sos=s, years=yrs, eco=eco_IDs, shp=extractBy, mask=y))
+    d[!is.na(SOS) & !is.na(TDD),]
 }
 
-d <- lapply(list(tdd05, tdd10, tdd15, tdd20), make_TDD_df, extractBy=eco_shp, projectTo=sos, resampleTo=ecomask)
+d <- lapply(list(tdd05, tdd10, tdd15, tdd20), make_TDD_df, extractBy=eco_shp, y=sos)
 lapply(1:length(d), function(i, x, pct) x[[i]][, Threshold := pct[i]], x=d, pct=paste0(c("05",10,15,20), "pct"))
 d <- rbindlist(d)
 tmp <- with(d, paste(Region, Threshold, Year))
 tmp <- as.numeric(lapply(split(tmp, tmp), length))
 setorder(d, Region, Threshold, Year)
 d[, Obs := unlist(lapply(tmp, function(x) 1:x))]
-setcolorder(d, c("Region", "Year", "Threshold", "Obs", "TDD"))
+setcolorder(d, c("Region", "Year", "Threshold", "Obs", "x", "y", "SOS", "TDD"))
 
 d %>% group_by(Threshold, Region) %>%
     summarise(Min=min(TDD, na.rm=T),
@@ -82,7 +81,7 @@ d %>% group_by(Threshold, Year) %>%
               Max=max(TDD, na.rm=T), Mean=mean(TDD, na.rm=T), SD=sd(TDD, na.rm=T)) -> d.stats2
 
 d %>% group_by(Region, Threshold, Year) %>% summarise(SD=sd(TDD, na.rm=T)) -> d.hm
-save(d, d.stats, d.stats2, d.hm, sos, ecomask, yrs, cbpal, file="data.RData")
+save(d, d.stats, d.stats2, d.hm, sos, eco_shp, ecomask, yrs, cbpal, file="data.RData")
 
 # @knitr setup2
 setwd("C:/github/GrowingSeason/workspaces")
