@@ -67,9 +67,10 @@ for(i in 1:length(models)){
 })
 
 names(maplist) <- models
-
 save(d, maplist, ecomask, eco_shp, file="doytdd_final.RData")
+
 ###################################################################
+
 setwd("C:/github/GrowingSeason/workspaces")
 library(data.table)
 library(dplyr)
@@ -89,7 +90,7 @@ d2 <- left_join(d, narr.means) %>% mutate(`DOY TDD Deltas`=`DOY TDD`-NARR_Mean)
 
 # save workspace for shiny app
 d.qmap <- d2
-save(d.qmap, eco_shp, ecomask, regions, maplist, file="C:/github/shiny-apps/sos/appdata_qmap.RData")
+save(d.qmap, eco_shp, ecomask, regions, maplist, file="C:/github/shiny-apps/gs/appdata_qmap.RData")
 
 dsub <- d %>% filter(Scenario %in% scens & Model %in% mods)
 dsub2 <- d2 %>% filter(Scenario %in% scens & Model %in% mods)
