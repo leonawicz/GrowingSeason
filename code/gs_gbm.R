@@ -34,8 +34,8 @@ d.sub <- group_by(d, Region, Year) %>% sample_frac(0.10) %>% setorder(Region, Ye
 
 system.time({
 d.gbm <- d.sub %>% do(GBM1=gbm(SOS ~ DOY_TDD05 + DOY_TDD10 + DOY_TDD15 + DOY_TDD20, data=.,
-    distribution="gaussian", bag.fraction=1, cv.folds=5, train.fraction=0.5,
-    #weights=sqrt(SOS),
+    distribution="gaussian", bag.fraction=0.5, cv.folds=5, train.fraction=0.5,
+    weights=sqrt(SOS),
     interaction.depth=2, n.minobsinnode=2, n.trees=20000, shrinkage=0.1,
     keep.data=F,
     verbose=FALSE)) %>% group_by(Region)
@@ -80,7 +80,7 @@ png(file.path(plotDir, paste0("gbm_PD_test2.png")), width=3200, height=1600, res
 dev.off()
 
 # Time series
-d.preds <- d.gbm %>% do(Pred=get_preds(., model=GBM1, newdata=d.sub, n.trees=BI, type.err="cv")) %>% group_by(Region)
+d.preds <- d.gbm %>% do(Pred=get_preds(., model=GBM1, newdata=d.sub, n.trees=20000, type.err="cv")) %>% group_by(Region)
 
 # Prep to test exchangeability of pairs of regional GBMs
 region.pair <- c("Arctic Tundra", "Coastal Rainforests")
