@@ -4,7 +4,7 @@
 
 #### Script author:  Matthew Leonawicz ####
 #### Maintainted by: Matthew Leonawicz ####
-#### Last updated:   12/21/2015        ####
+#### Last updated:   01/07/2015        ####
 
 # @knitr setup
 #setwd("C:/github/GrowingSeason/workspaces")
@@ -36,7 +36,7 @@ system.time({
 d.gbm <- d.sub %>% do(GBM1=gbm(SOS ~ DOY_TDD05 + DOY_TDD10 + DOY_TDD15 + DOY_TDD20, data=.,
     distribution="gaussian", bag.fraction=1, cv.folds=5, train.fraction=0.5,
     #weights=sqrt(SOS),
-    interaction.depth=1, n.minobsinnode=2, n.trees=5000, shrinkage=0.005,
+    interaction.depth=2, n.minobsinnode=2, n.trees=20000, shrinkage=0.1,
     keep.data=F,
     verbose=FALSE)) %>% group_by(Region)
 })
@@ -80,7 +80,7 @@ png(file.path(plotDir, paste0("gbm_PD_test2.png")), width=3200, height=1600, res
 dev.off()
 
 # Time series
-d.preds <- d.gbm %>% do(Pred=get_preds(., model=GBM1, newdata=d.sub, n.trees=BI)) %>% group_by(Region)
+d.preds <- d.gbm %>% do(Pred=get_preds(., model=GBM1, newdata=d.sub, n.trees=BI, type.err="cv")) %>% group_by(Region)
 
 # Prep to test exchangeability of pairs of regional GBMs
 region.pair <- c("Arctic Tundra", "Coastal Rainforests")
@@ -111,6 +111,10 @@ ggplot(d.sub2, aes(x=Year, y=SOS, colour=Source)) + scale_color_manual(values=c(
     theme_bw() + theme(legend.position="bottom") + ggtitle("Observed and modeled start of growing season") +
     scale_x_continuous(breaks=c(1982,1990,2000,2010)) +
     facet_wrap(~Region, ncol=3)
+dev.off()
+png(file.path(plotDir, paste0("gbm_TSpreds_byRegionSD.png")), width=3200, height=1600, res=200)
+ggplot(d.sub2 %>% group_by(Region, Source) %>% summarise(SD=sd(SOS)), aes(x=Region, y=SD, fill=Source)) + scale_fill_manual(values=c("black", "red")) + geom_bar(stat="identity", position="dodge") +
+    theme_bw() + theme(legend.position="bottom") + ggtitle("Observed and modeled start of growing season period SD")
 dev.off()
 
 # save workspace for shiny app
