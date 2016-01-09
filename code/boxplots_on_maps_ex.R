@@ -83,7 +83,7 @@ Vbottom <- viewport(x=unit(0.5, "npc"), y=unit(0.025, "npc"), width=unit(1, "npc
 Vtop <- viewport(x=unit(0.5, "npc"), y=unit(0.975, "npc"), width=unit(1, "npc"), height=unit(1, "npc"))
 
 # draw plot
-png("../plots/test/boxplots_on_maps_test.png", height=3600, width=2400, res=300)
+png("../plots/test/boxplots_on_maps_test.png", height=3600, width=3000, res=300)
 grid.newpage()
 pushViewport(outerBox)
 #grid.rect(gp = gpar(col = "red", fill = NA))
