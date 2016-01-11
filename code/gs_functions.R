@@ -1,5 +1,5 @@
 # Error curves
-get_bi <- function(data, model, outDir, prefix="", suffix="", saveplot=TRUE, ...){
+get_bi <- function(data, model, outDir, prefix="", suffix="", saveplot=TRUE, test=FALSE, cv=TRUE, ...){
     data <- model[[1]]
     if(saveplot){
     dots <- list(...)
@@ -9,8 +9,8 @@ get_bi <- function(data, model, outDir, prefix="", suffix="", saveplot=TRUE, ...
     if(prefix!="") prefix <- paste0(prefix, "_")
     if(suffix!="") suffix <- paste0("_", suffix)
     png(file.path(outDir, paste0(prefix, "gbm_ERR", suffix, ".png")), width=w, height=h, res=r)
-    gbm.perf(data, method="test")
-    gbm.perf(data, method="cv")
+    if(test) gbm.perf(data, method="test")
+    if(cv) gbm.perf(data, method="cv")
     dev.off()
     }
     list(
@@ -24,10 +24,9 @@ get_ri <- function(data, model, n.trees, outDir, prefix="", suffix="", saveplot=
     data <- model[[1]]
     n <- n.trees[[1]]
     cbpal <- c("#8B4500", "#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-    ri <- data.table(rbind(
-        cbind(Method="Test", summary(data, n.trees=n$Test, order=F, plotit=F)),
-        cbind(Method="CV", summary(data, n.trees=n$CV, order=F, plotit=F))
-    ))
+    ri.test <- if(length(n$Test)) cbind(Method="Test", summary(data, n.trees=n$Test, order=F, plotit=F)) else NULL
+    ri.cv <- if(length(n$CV)) cbind(Method="CV", summary(data, n.trees=n$CV, order=F, plotit=F)) else NULL
+    ri <- data.table(rbind(ri.test, ri.cv))
     setnames(ri, c("Method","Predictor","RI"))
     if(saveplot){
     dots <- list(...)
@@ -68,6 +67,7 @@ get_pd <- function(data=NULL, source_data, x, y=NULL, model, outDir, vars=NULL, 
     if(is.null(data) & class(model)!="gbm") stop("Must pass a gbm object to 'model' if not using a gbm data table for 'data'.")
     if(!is.null(data)){
         model <- model[[1]]
+        max.vars <- nrow(data$RI[[1]])
         grp <- as.character(groups(data))
         for(i in 1:length(grp)) source_data <- filter_(source_data, .dots=list(paste0(grp[i], "==\'", data[[grp]][1], "\'")))
     }
@@ -79,6 +79,7 @@ get_pd <- function(data=NULL, source_data, x, y=NULL, model, outDir, vars=NULL, 
     if(is.character(y)) y <- as.name(y)
     if(is.null(vars)) vars <- 1:n.vars
     if(is.null(n.vars)) n.vars <- length(vars)
+    stopifnot(n.vars <= max.vars)
     dots <- list(...)
     if(is.null(dots$width)) w <- 1600 else w <- dots$width
     if(is.null(dots$height)) h <- 1600 else h <- dots$height
@@ -115,7 +116,7 @@ get_pd <- function(data=NULL, source_data, x, y=NULL, model, outDir, vars=NULL, 
     }
     
     # process
-    d.pd <- rbindlist(lapply(vars, get_pd_dt, model=model, order=order.by.ri)) %>% group_by(Var, RI) %>%
+    d.pd <- rbindlist(lapply(1:max.vars, get_pd_dt, model=model, order=order.by.ri)) %>% group_by(Var, RI) %>%
         summarise(x=smooth.spline(x, y, df=spline.df)$x, y=smooth.spline(x, y, df=spline.df)$y) %>% group_by(RI, add=T) %>%
         summarise(x=approx(x, y, n=1000)$x, y=approx(x, y, n=1000)$y) %>% arrange(Var)
     lev <- levels(d.pd$Var)
@@ -123,13 +124,11 @@ get_pd <- function(data=NULL, source_data, x, y=NULL, model, outDir, vars=NULL, 
         lev <- paste0(unique(d.pd$Var), ": RI = ", round(unique(d.pd$RI), 2))
         d.pd <- mutate(d.pd, Var=factor(paste0(Var, ": RI = ", round(RI, 2)), levels=lev))
     }
-    
     data <- summarise_(data, Val=lazyeval::interp(~dtDen(var, adj=density.adjust, out="list")$x, var=x), Prob=lazyeval::interp(~dtDen(var, adj=density.adjust, out="list")$y, var=x)) %>%
     mutate(Var=factor(lev[pmatch(Var, lev, duplicates.ok=TRUE)], levels=lev)) %>% arrange(Var) %>% cbind(select(d.pd, x, y)) %>% group_by(Region, Var) %>%
     mutate(Prob=map_range(Prob, y)) %>% group_by(Var, add=T)
-    
     if(saveplot){
-    g <- ggplot(data %>% mutate(Ymin=min(Prob)), aes(x=Val)) + facet_wrap(as.formula(facet.formula), ncol=cols, scales=scales) + labs(x=xlb, y=ylb)
+    g <- ggplot(data %>% filter(Var %in% levels(Var)[1:n.vars]) %>% mutate(Ymin=min(Prob)), aes(x=Val)) + facet_wrap(as.formula(facet.formula), ncol=cols, scales=scales) + labs(x=xlb, y=ylb)
     if(is.null(color.var)) g <- g + geom_ribbon(aes(ymin=Ymin, ymax=Prob), fill="orange") + geom_line(aes(x=x, y=y), size=1)
     if(!is.null(color.var)) g <- g + geom_ribbon(aes_string(ymin="Ymin", ymax="Prob", colour=color.var, fill=color.var), alpha=0.5) + geom_line(aes_string(x="x", y="y", colour=color.var), size=1)
     png(file.path(outDir, paste0(prefix, "gbm_PD", suffix, ".png")), width=w, height=h, res=r)
