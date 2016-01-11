@@ -33,10 +33,10 @@ set.seed(564)
 d.sub <- group_by(d, Region, Year) %>% sample_frac(0.10) %>% setorder(Region, Year) %>% group_by(Region)
 
 system.time({
-d.gbm <- d.sub %>% do(GBM1=gbm(SOS ~ DOY_TDD05 + DOY_TDD10 + DOY_TDD15 + DOY_TDD20, data=.,
-    distribution="gaussian", bag.fraction=0.5, cv.folds=5, train.fraction=0.5,
-    weights=sqrt(SOS),
-    interaction.depth=2, n.minobsinnode=2, n.trees=20000, shrinkage=0.1,
+d.gbm <- d.sub %>% do(GBM1=gbm(SOS ~ DOY_TDD05 + DOY_TDD10 + DOY_TDD15 + DOY_TDD20 + Year, data=.,
+    distribution="gaussian", bag.fraction=1, cv.folds=5, train.fraction=1,
+    #weights=sqrt(SOS),
+    interaction.depth=2, n.minobsinnode=2, n.trees=5000, shrinkage=0.1,
     keep.data=F,
     verbose=FALSE)) %>% group_by(Region)
 })
@@ -62,8 +62,8 @@ dev.off()
 #d.gbm %>% do(get_pd2(., model=GBM1, plotDir, suffix=Region, saveplot=T))
 #gbm1 <- (d.gbm %>% filter(Region=="Arctic Tundra"))$GBM1[[1]]
 #get_pd(source_data=d.tdd %>% filter(Region=="Arctic Tundra"), x=DOY_TDD, y=SOS, outDir=plotDir, model=gbm1, vars=1:4, order.by.ri=TRUE)
-d.tdd <- select(d.sub, -Year, -Obs, -x, -y) %>% melt(id.vars=c("Region", "SOS"), variable.name="Var", value.name="DOY_TDD") %>% group_by(Region, Var)
-d.pd <- d.gbm %>% do(PD=get_pd(., source_data=d.tdd, x=DOY_TDD, y=SOS, outDir=plotDir, model=GBM1, vars=1:4, order.by.ri=TRUE, suffix=Region, saveplot=T)) %>% group_by(Region)
+d.tdd <- select(d.sub, -Obs, -x, -y) %>% melt(id.vars=c("Region", "SOS"), variable.name="Var", value.name="Val") %>% group_by(Region, Var)
+d.pd <- d.gbm %>% do(PD=get_pd(., source_data=d.tdd, x=Val, y=SOS, outDir=plotDir, model=GBM1, vars=1:4, order.by.ri=TRUE, suffix=Region, saveplot=T)) %>% group_by(Region)
 d.gbm <- data.table(left_join(d.gbm, d.pd)) %>% group_by(Region)
 
 d.pd.test <- d.pd %>% group_by %>% select(-Region) %>% unnest %>% mutate(Var=sapply(strsplit(Var, ":"), "[", 1), Var=factor(Var, levels=sort(unique(Var)))) %>% group_by(Region, Var)
@@ -80,7 +80,7 @@ png(file.path(plotDir, paste0("gbm_PD_test2.png")), width=3200, height=1600, res
 dev.off()
 
 # Time series
-d.preds <- d.gbm %>% do(Pred=get_preds(., model=GBM1, newdata=d.sub, n.trees=20000, type.err="cv")) %>% group_by(Region)
+d.preds <- d.gbm %>% do(Pred=get_preds(., model=GBM1, newdata=d.sub, n.trees=BI, type.err="cv")) %>% group_by(Region)
 
 # Prep to test exchangeability of pairs of regional GBMs
 region.pair <- c("Arctic Tundra", "Coastal Rainforests")
@@ -90,8 +90,8 @@ d.gbm.tmp2 <- d.gbm.tmp <- copy(d.gbm)
 d.gbm.tmp <- filter(d.gbm.tmp, Region %in% region.pair)
 d.gbm.tmp2 <- filter(d.gbm.tmp, Region %in% region.pair)
 d.gbm.tmp2$Region <- d.gbm.tmp$Region[2:1]
-d.preds.tmp <- d.gbm.tmp %>% do(Pred=get_preds(., model=GBM1, newdata=d.sub.tmp, n.trees=BI)) %>% group_by(Region)
-d.preds.tmp2 <- d.gbm.tmp2 %>% do(Pred=get_preds(., model=GBM1, newdata=d.sub.tmp, n.trees=BI)) %>% group_by(Region)
+d.preds.tmp <- d.gbm.tmp %>% do(Pred=get_preds(., model=GBM1, newdata=d.sub.tmp, n.trees=BI, type.err="cv")) %>% group_by(Region)
+d.preds.tmp2 <- d.gbm.tmp2 %>% do(Pred=get_preds(., model=GBM1, newdata=d.sub.tmp, n.trees=BI, type.err="cv")) %>% group_by(Region)
 
 d.gbm1 <- copy(d.gbm) # for shiny app
 d.gbm.data <- copy(d.sub) # for shiny app
