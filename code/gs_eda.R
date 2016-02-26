@@ -4,7 +4,7 @@
 
 #### Script author:  Matthew Leonawicz ####
 #### Maintainted by: Matthew Leonawicz ####
-#### Last updated:   06/25/2015        ####
+#### Last updated:   02/25/2015        ####
 
 # @knitr setup
 setwd("C:/github/GrowingSeason/workspaces")
@@ -58,7 +58,7 @@ setorder(d, Region, Threshold, Year)
 d[, Obs := unlist(lapply(tmp, function(x) 1:x))]
 setcolorder(d, c("Region", "Year", "Threshold", "Obs", "x", "y", "SOS", "TDD"))
 
-d %>% group_by(Threshold, Region) %>%
+d.stats <- group_by(d, Threshold, Region) %>%
     summarise(Min=min(TDD, na.rm=T),
               Pct05=quantile(TDD, 0.05, na.rm=T),
               Pct10=quantile(TDD, 0.10, na.rm=T),
@@ -67,9 +67,9 @@ d %>% group_by(Threshold, Region) %>%
               Pct75=quantile(TDD, 0.75, na.rm=T),
               Pct90=quantile(TDD, 0.90, na.rm=T),
               Pct95=quantile(TDD, 0.95, na.rm=T),
-              Max=max(TDD, na.rm=T), Mean=mean(TDD, na.rm=T), SD=sd(TDD, na.rm=T)) -> d.stats
+              Max=max(TDD, na.rm=T), Mean=mean(TDD, na.rm=T), SD=sd(TDD, na.rm=T))
               
-d %>% group_by(Threshold, Year) %>%
+d.stats2 <- group_by(d, Threshold, Year) %>%
     summarise(Min=min(TDD, na.rm=T),
               Pct05=quantile(TDD, 0.05, na.rm=T),
               Pct10=quantile(TDD, 0.10, na.rm=T),
@@ -78,9 +78,9 @@ d %>% group_by(Threshold, Year) %>%
               Pct75=quantile(TDD, 0.75, na.rm=T),
               Pct90=quantile(TDD, 0.90, na.rm=T),
               Pct95=quantile(TDD, 0.95, na.rm=T),
-              Max=max(TDD, na.rm=T), Mean=mean(TDD, na.rm=T), SD=sd(TDD, na.rm=T)) -> d.stats2
+              Max=max(TDD, na.rm=T), Mean=mean(TDD, na.rm=T), SD=sd(TDD, na.rm=T))
 
-d %>% group_by(Region, Threshold, Year) %>% summarise(SD=sd(TDD, na.rm=T)) -> d.hm
+d.hm <- group_by(d, Region, Threshold, Year) %>% summarise(SD=sd(TDD, na.rm=T))
 save(d, d.stats, d.stats2, d.hm, sos, eco_shp, ecomask, yrs, cbpal, file="data.RData")
 
 # @knitr setup2
