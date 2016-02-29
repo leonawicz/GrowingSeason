@@ -4,10 +4,9 @@
 
 #### Script author:  Matthew Leonawicz ####
 #### Maintainted by: Matthew Leonawicz ####
-#### Last updated:   01/07/2015        ####
+#### Last updated:   02/29/2015        ####
 
 # @knitr setup
-#setwd("C:/github/GrowingSeason/workspaces")
 setwd("/workspace/UA/mfleonawicz/projects/GrowingSeason/workspaces")
 
 library(rasterVis)
@@ -19,14 +18,13 @@ library(tidyr)
 library(parallel)
 library(gbm)
 
-# d, d.stats, d.stats2, d.hm, sos, ecomask, yrs, cbpal
-load("data.RData")
+rasterOptions(tmpdir="/atlas_scratch/mfleonawicz/raster_tmp", chunksize=10e10, maxmemory=10e11)
+load("data.RData") # d, d.stats, d.stats2, d.hm, sos, ecomask, yrs, cbpal
 source("../code/gs_functions.R")
 sw.shp <- shapefile("/big_scratch/mfleonawicz/Alf_Files_20121129/statewide_shape/Alaska_Albers_ESRI.shp")
-dem <- raster("/Data/Base_Data/GIS/GIS_Data/Raster/DEMs/PRISM_2km_DEM/AKCanada_2km_DEM_mosaic.tif") %>%
-  resample(sos)
+dem <- raster("/Data/Base_Data/GIS/GIS_Data/Raster/DEMs/PRISM_2km_DEM/AKCanada_2km_DEM_mosaic.tif") %>% resample(sos)
 dir.create(plotDir <- file.path("../plots/gbm/models"), recursive=T, showWarnings=F)
-rasterOptions(tmpdir="/atlas_scratch/mfleonawicz/raster_tmp", chunksize=10e10, maxmemory=10e11)
+sos <- readAll(brick("../data/sos_1982_2010.tif"))
 
 d <- dcast(d, Region + Year + Obs + x + y + SOS ~ Threshold, value.var="TDD")
 d <- mutate(d, Elev=raster::extract(dem, cbind(x, y)))
@@ -37,18 +35,25 @@ d.sub <- group_by(d, Region, Year) %>% sample_frac(0.50) %>% setorder(Region, Ye
 
 ##############################################
 set.seed(564)
-n.trees=0.25*c(15000, 25000, 40000, 30000, 15000, 5000, 25000, 40000, 5000)
+n.trees=round(0.25*c(15000, 25000, 40000, 30000, 15000, 5000, 25000, 40000, 5000))
 
-gbm_explore <- function(i, d, n.trees, frac){
+gbm_explore <- function(i, data, n.trees, frac, years=sort(unique(d$Year)), by.year=TRUE){
+    n <- if(by.year) length(years) else 1
+    out <- vector("list", n)
+    data <- filter(data, Year %in% years)
+    gc()
+    for(j in seq_along(out)){
+    if(by.year){ d <- filter(data, Year==years[j]) } else { d <- data; rm(data); gc() }
     d <- group_by(d, Region, Year) %>% sample_frac(frac) %>% group_by(Region)
     d.train <- sample_frac(d, 0.9)
     d.test <- setdiff(d, d.train)
-    gbm1 <- d.train %>% split(.$Region) %>% purrr::map2(n.trees, ~gbm(SOS ~ DOY_TDD05 + DOY_TDD10 + DOY_TDD15 + DOY_TDD20 + x + y + Elev, data=.x,
+    d.gbm <- d.train %>% split(.$Region) %>% purrr::map2(n.trees, ~gbm(SOS ~ DOY_TDD05 + DOY_TDD10 + DOY_TDD15 + DOY_TDD20 + x + y + Elev, data=.x,
         distribution="gaussian", bag.fraction=0.5, cv.folds=5, train.fraction=1,
-        interaction.depth=1, n.minobsinnode=10, n.trees=.y, shrinkage=0.1, verbose=FALSE, n.cores=1))
-    d.gbm <- d.train %>% group_by %>% select(Region) %>% distinct(Region) %>% mutate(GBM1=gbm1) %>% group_by(Region)
+        interaction.depth=1, n.minobsinnode=5, n.trees=.y, shrinkage=0.1, verbose=FALSE, keep.data=FALSE, n.cores=1))
+    d.gbm <- d.train %>% group_by %>% select(Region) %>% distinct(Region) %>% mutate(GBM1=d.gbm) %>% group_by(Region)
+    rm(d.train); gc()
     d.bi <- d.gbm %>% do(BI=get_bi(., model=GBM1, plotDir, suffix=Region, saveplot=F))
-    d.gbm <- data.table(left_join(d.gbm, d.bi)) %>% group_by(Region)
+    d.gbm <- data.table(suppressMessages(left_join(d.gbm, d.bi))) %>% group_by(Region)
     d.preds <- d.gbm %>% do(Predicted=get_preds(., model=GBM1, newdata=d.test, n.trees=BI, type.err="cv")) %>% group_by(Region)
     d.gbm <- d.gbm %>% mutate(CV=purrr::map(BI, ~.x$CV))
     d.test$Predicted <- unnest(d.preds)$Predicted
@@ -56,35 +61,48 @@ gbm_explore <- function(i, d, n.trees, frac){
     d.bias <- d.bias %>% do(Region=.$Region, Predicted=.$Predicted, Coef=.$Coef, `Bias corrected`=(.$Predicted-.$Coef[[1]]["(Intercept)"])/.$Coef[[1]][".x"])
     d.coef <- d.bias %>% select(Region, Coef) %>% unnest(Region) %>% mutate(Coef=purrr::map(.$Coef, ~data.frame(t(.x[[1]])) %>% setnames(c("intercept", "slope")))) %>% unnest
     d.bias <- d.bias %>% select(-Coef) %>% unnest(Region) %>% unnest
-    #d.bias <- d.test %>% nest(-Region) %>% group_by(Region) %>% do(Region=.$Region, Predicted=.$Predicted[[1]], Coef=purrr::map2(.$SOS, .$Predicted, ~lm(.y ~ .x)$coefficients), Coef2=purrr::map2(.$Predicted, .$SOS, ~lm(.y ~ .x)$coefficients))
-    #d.bias <- d.bias %>% do(Region=.$Region, Predicted=.$Predicted, `Bias corrected`=(.$Predicted-.$Coef[[1]]["(Intercept)"])/.$Coef[[1]][".x"], `Bias corrected2`=.$Predicted*.$Coef[[1]][".x"]+.$Coef[[1]]["(Intercept)"]) %>% unnest(Region) %>% unnest
-    d.test <- left_join(d.test, d.bias, copy=T)
+    d.test <- suppressMessages(left_join(d.test, d.bias, copy=T))
+    rm(d.bias); gc()
     d.test$Run <- i
-    d.out <- d.test %>% select(Region, Year, Run, SOS, Predicted, `Bias corrected`) %>% setnames(c("Region", "Year", "Run", "Observed", "Predicted", "Bias corrected")) %>%
-    #d.out <- d.test %>% select(Region, Year, Run, SOS, Predicted, `Bias corrected`, `Bias corrected2`) %>% setnames(c("Region", "Year", "Run", "Observed", "Predicted", "Bias corrected", "Bias corrected2")) %>%
+    d.test <- d.test %>% select(Region, Year, Run, SOS, Predicted, `Bias corrected`) %>% setnames(c("Region", "Year", "Run", "Observed", "Predicted", "Bias corrected")) %>%
         melt(id.vars=c("Region", "Year", "Run"), value.name="SOS") %>% data.table %>% setnames(c("Region", "Year", "Run", "Source", "SOS")) %>%
         group_by(Region, Year, Run, Source) %>% summarise(SOS=round(mean(SOS)))
-    list(GBM=d.gbm, data=d.out, LM=d.coef)
+    if(by.year){
+        d.coef <- mutate(d.coef, Year=years[j]) %>% select(Region, Year, intercept, slope)
+        d.gbm <- mutate(d.gbm, Year=years[j]) %>% select(Region, Year, GBM1, BI, CV)
+    }
+    out[[j]] <- list(GBM=d.gbm, data=d.test, LM=d.coef)
+    rm(d.gbm, d.test, d.coef); gc()
+    if(i==1 & n > 1) print(j)
+    }
+    if(n==1){
+        out <- out[[1]]
+    } else {
+        out <- list(GBM=rbindlist(out %>% purrr::map(~.x$GBM)) %>% group_by, data=bind_rows(out %>% purrr::map(~.x$data)), LM=bind_rows(out %>% purrr::map(~.x$LM)))
+    }
+    out
 }
 
-system.time( dlist <- mclapply(1:32, gbm_explore, d, n.trees=n.trees, frac=0.10, mc.cores=32) )
+system.time( dlist <- mclapply(1:32, gbm_explore, d, n.trees=n.trees, frac=0.5, by.year=T, mc.cores=32) )
 gbm.out <- lapply(dlist, "[[", 1)
-cv.out <-  purrr::map(gbm.out, ~select(.x, Region, CV)) %>% rbindlist
+cv.out <-  purrr::map(gbm.out, ~select(.x, Region, Year, CV)) %>% bind_rows
 d.out <- rbindlist(lapply(dlist, "[[", 2))
 lm.out <- lapply(dlist, "[[", 3)
-d.out <- group_by(d.out, Region, Year, Source) %>% summarise(SOS=mean(SOS)) %>% bind_rows(filter(d.out, Source!="Observed"))
+d.out <- group_by(d.out, Region, Year, Source) %>% summarise(SOS=mean(SOS)) %>% bind_rows(filter(d.out))
 
 # Spatial predictions
 gbm_prediction_maps <- function(d, newdata, r, lm.pars=NULL, output="maps", n.cores=32){
     yrs <- sort(unique(newdata$Year))
-    d <- mclapply(seq_along(d), function(i, x) x[[i]] %>% group_by(Region) %>% do(Predicted=get_preds(., model=GBM1, newdata=newdata, n.trees=BI, type.err="cv")) %>% mutate(Run=i), d, mc.cores=n.cores)
-    d <- d %>% purrr::map(~unnest(.x) %>% mutate(Cell=cellFromXY(r, select(newdata, x, y)), Year=newdata$Year) %>% nest(Cell, Predicted) %>% group_by(Region, Year, Run))
+    grp <- if("Year" %in% names(d[[1]])) list("Region", "Year") else list("Region")
+    if("Year" %in% names(d[[1]])) newdata <- arrange(newdata, Year, Region, Obs)
+    d <- mclapply(seq_along(d), function(i, x) x[[i]] %>% group_by_(.dots=grp) %>% do(Predicted=get_preds(., model=GBM1, newdata=newdata, n.trees=BI, type.err="cv")) %>% mutate(Run=i), x=d, mc.cores=n.cores)
+    d <- d %>% purrr::map(~unnest(.x) %>% mutate(Cell=cellFromXY(r, select(newdata, x, y)), Year=as.integer(newdata$Year)) %>% nest(Cell, Predicted) %>% group_by(Region, Year, Run))
     if(!is.null(lm.pars)){
-        d <- d %>% purrr::map2(lm.pars, ~left_join(.x, .y, copy=T))
+        d <- d %>% purrr::map2(lm.pars, ~suppressMessages(left_join(.x, .y, copy=T)))
         d <- d %>% purrr::map(~unnest(.x) %>% mutate(`Bias corrected`=(Predicted-intercept)/slope) %>% nest(Cell, Predicted, `Bias corrected`) %>% group_by(Region, Year, Run))
     }
     if(output=="table") return(bind_rows(d))
-    
+    gc()
     setPred <- function(i, r, d, values, yrs){
         r.pred <- raster(r)
         setValues(r.pred, NA)
@@ -95,18 +113,15 @@ gbm_prediction_maps <- function(d, newdata, r, lm.pars=NULL, output="maps", n.co
     values <- if(is.null(lm.pars)) "Predicted" else c("Predicted", "Bias corrected")
     b <- vector("list", length(values))
     for(k in seq_along(values)){
-        b[[k]] <- d %>% purrr::map(~brick(mclapply(seq_along(yrs), setPred, r=r, d=.x, values=values[k], yrs=yrs, mc.cores=n.cores)))
-        #names(b[[k]]) <- gsub(" ", "_", paste(values[k], yrs, sep="_"))
+        b[[k]] <- mclapply(d, function(x) brick(lapply(seq_along(yrs), setPred, r=r, d=x, values=values[k], yrs=yrs)), mc.cores=n.cores)
+        gc()
     }
     names(b) <- values
     b
 }
 
-pred.maps <- gbm_prediction_maps(gbm.out, d, subset(sos, 1), lm.out)
-pred.maps.gbm1 <- pred.maps %>% purrr::map(~.x[[32]])
-pred.maps.gbmMean <- pred.maps %>% purrr::map(~Reduce("+", .x)/length(.x))
+pred.maps <- gbm_prediction_maps(gbm.out, d, subset(sos, 1), lm.out, n.cores=4)
 save(cv.out, d.out, pred.maps, file="gbm_preds_eval_big.RData")
-save(cv.out, d.out, pred.maps.gbm1, pred.maps.gbmMean, file="gbm_preds_eval.RData")
 
 rTheme <- function(region=colorRampPalette(c("darkred", "firebrick1", "white", "royalblue", "darkblue"))(19), ...){
     theme <- custom.theme.2(region=region, ...)
@@ -115,20 +130,19 @@ rTheme <- function(region=colorRampPalette(c("darkred", "firebrick1", "white", "
 }
 
 pred.maps.gbm.samples <- pred.maps[[1]] %>% purrr::map(~calc(.x, mean)) %>% stack
+pred.maps.gbm1 <- pred.maps %>% purrr::map(~.x[[32]])
 
-png(file.path(plotDir, paste0("gbm_pred_deltas_gbm_sample.png")), width=3200, height=1600, res=200)
-p <- levelplot(pred.maps.gbm.samples, maxpixels=ncell(pred.maps.gbm.samples), main=paste("1982-2010 mean start of growing season deltas: single GBMs"), par.settings=rTheme, xlab=NULL, ylab=NULL, scales=list(draw=F), contour=F, margin=F) +#, at=at.vals, colorkey=colkey)
-        latticeExtra::layer(sp.polygons(sw.shp, fill='transparent', alpha=0.3))
-print(p)
-dev.off()
-
-sos <- brick("../data/sos_1982_2010.tif")
 s1 <- stack(calc(pred.maps.gbm1$Predicted - sos, mean), calc(pred.maps.gbm1$`Bias corrected` - sos, mean))
 sMean <- list(pred.maps[[1]] %>% purrr::map(~.x-sos), pred.maps[[2]] %>% purrr::map(~.x-sos))
 sMean <- sMean %>% purrr::map(~Reduce("+", .x)/length(.x))
 sMean2002 <- sMean %>% purrr::map(~subset(.x, match(2002, yrs))) %>% stack
 sMean <- sMean %>% purrr::map(~calc(.x, mean)) %>% stack
 names(s1) <- names(sMean) <- names(sMean2002) <- c("Prediction_deltas", "Bias_corrected_deltas")
+s1 <- subset(s1, 1)
+sMean <- subset(sMean, 1)
+sMean2002 <- subset(sMean2002, 1)
+
+save(cv.out, d.out, s1, sMean, sMean2002, file="gbm_preds_eval.RData")
 
 rng <- range(c(s1[], sMean[]), na.rm=T)
 rng <- range(rng, -rng)
@@ -156,6 +170,40 @@ p <- levelplot(sMean2002, maxpixels=ncell(sMean2002), main=paste("2002 start of 
         latticeExtra::layer(sp.polygons(sw.shp, fill='transparent', alpha=0.3))
 print(p)
 dev.off()
+
+arctic <- Which(ecomask==3)
+arctic[arctic==0] <- NA
+arctic <- trim(arctic)
+
+rTheme <- function(region=brewer.pal(9, "Blues"), ...){
+    theme <- custom.theme.2(region=region, ...)
+    theme$strip.background$col <- theme$strip.shingle$col <- theme$strip.border$col <- theme$panel.background$col <- theme$axis.line$col <- "transparent"
+    theme
+}
+
+png(file.path(plotDir, paste0("gbm_pred_byModel.png")), width=3200, height=1600, res=200)
+p <- levelplot(pred.maps.gbm.samples, maxpixels=ncell(pred.maps.gbm.samples), main=paste("1982-2010 mean start of growing season GBM comparisons"), par.settings=rTheme, xlab=NULL, ylab=NULL, scales=list(draw=F), contour=F, margin=F) +#, at=at.vals, colorkey=colkey)
+        latticeExtra::layer(sp.polygons(sw.shp, fill='transparent', alpha=0.3))
+print(p)
+dev.off()
+
+sos2002 <- subset(sos, 21)
+s <- stack(sos2002, sos2002 + sMean2002)
+names(s) <- c("Observed", "Predicted")
+png(file.path(plotDir, paste0("gbm_pred_gbmMean2002.png")), width=3200, height=1600, res=200)
+p <- levelplot(s, maxpixels=ncell(s), main=paste("2002 start of growing season: mean GBM"), par.settings=rTheme, xlab=NULL, ylab=NULL, scales=list(draw=F), contour=F, margin=F) +
+        latticeExtra::layer(sp.polygons(sw.shp, fill='transparent', alpha=0.3))
+print(p)
+dev.off()
+
+s <- crop(s, arctic) %>% mask(arctic)
+png(file.path(plotDir, paste0("gbm_pred_gbmMean2002_ArcticTundra.png")), width=3200, height=1600, res=200)
+p <- levelplot(s, maxpixels=ncell(s), main=paste("2002 start of Arctic Tundra growing season: mean GBM"), par.settings=rTheme, xlab=NULL, ylab=NULL, scales=list(draw=F), contour=F, margin=F) +
+        latticeExtra::layer(sp.polygons(sw.shp, fill='transparent', alpha=0.3))
+print(p)
+dev.off()
+
+d.gbm %>% do(BI=get_bi(., model=GBM1, plotDir, suffix=Region, saveplot=T))
 ##############################################
 
 system.time({
