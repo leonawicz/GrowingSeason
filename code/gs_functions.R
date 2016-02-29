@@ -55,7 +55,7 @@ get_ri <- function(data, model, n.trees, outDir, prefix="", suffix="", saveplot=
 get_preds <- function(data, model, newdata, n.trees, type.err="test"){
     m <- model[[1]]
     grp <- as.character(groups(data))
-    for(i in 1:length(grp)) newdata <- filter_(newdata, .dots=list(paste0(grp[i], "==\'", data[[grp]][1], "\'")))
+    for(i in 1:length(grp)) newdata <- filter_(newdata, .dots=list(paste0(grp[i], "==\'", data[[grp[i]]][1], "\'")))
     if(!is.numeric(n.trees)){
         n.trees <- if(type.err=="test") n.trees[[1]]$Test else if(type.err=="cv") n.trees[[1]]$CV else stop("type.err must be 'test' or 'cv'.")
     }
