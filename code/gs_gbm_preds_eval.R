@@ -22,37 +22,37 @@ gbm_explore <- function(i, data, n.trees, frac, years=sort(unique(data$Year)), b
   data <- filter(data, Year %in% years)
   gc()
   for(j in seq_along(out)){
-  if(by.year){ d <- filter(data, Year==years[j]) } else { d <- data; rm(data); gc() }
-  d <- group_by(d, Region, Year) %>% sample_frac(frac) %>% group_by(Region)
-  d.train <- sample_frac(d, 0.9)
-  d.test <- setdiff(d, d.train)
-  d.gbm <- d.train %>% split(.$Region) %>% purrr::map2(n.trees, ~gbm(SOS ~ DOY_TDD05 + DOY_TDD10 + DOY_TDD15 + DOY_TDD20 + x + y + Elev, data=.x,
-    distribution="gaussian", bag.fraction=0.5, cv.folds=5, train.fraction=1,
-    interaction.depth=1, n.minobsinnode=5, n.trees=.y, shrinkage=0.1, verbose=FALSE, keep.data=FALSE, n.cores=1))
-  d.gbm <- d.train %>% group_by %>% select(Region) %>% distinct(Region) %>% mutate(GBM1=d.gbm) %>% group_by(Region)
-  rm(d.train); gc()
-  d.bi <- d.gbm %>% do(BI=get_bi(., model=GBM1, plotDir, suffix=Region, saveplot=F))
-  d.gbm <- data.table(suppressMessages(left_join(d.gbm, d.bi))) %>% group_by(Region)
-  d.preds <- d.gbm %>% do(Predicted=get_preds(., model=GBM1, newdata=d.test, n.trees=BI, type.err="cv")) %>% group_by(Region)
-  d.gbm <- d.gbm %>% mutate(CV=purrr::map(BI, ~.x$CV))
-  d.test$Predicted <- unnest(d.preds)$Predicted
-  d.bias <- d.test %>% nest(-Region) %>% group_by(Region) %>% do(Region=.$Region, Predicted=.$Predicted[[1]], Coef=purrr::map2(.$SOS, .$Predicted, ~lm(.y ~ .x)$coefficients))
-  d.bias <- d.bias %>% do(Region=.$Region, Predicted=.$Predicted, Coef=.$Coef, `Bias corrected`=(.$Predicted-.$Coef[[1]]["(Intercept)"])/.$Coef[[1]][".x"])
-  d.coef <- d.bias %>% select(Region, Coef) %>% unnest(Region) %>% mutate(Coef=purrr::map(.$Coef, ~data.frame(t(.x[[1]])) %>% setnames(c("intercept", "slope")))) %>% unnest
-  d.bias <- d.bias %>% select(-Coef) %>% unnest(Region) %>% unnest
-  d.test <- suppressMessages(left_join(d.test, d.bias, copy=T))
-  rm(d.bias); gc()
-  d.test$Run <- i
-  d.test <- d.test %>% select(Region, Year, Run, SOS, Predicted, `Bias corrected`) %>% setnames(c("Region", "Year", "Run", "Observed", "Predicted", "Bias corrected")) %>%
-    melt(id.vars=c("Region", "Year", "Run"), value.name="SOS") %>% data.table %>% setnames(c("Region", "Year", "Run", "Source", "SOS")) %>%
-    group_by(Region, Year, Run, Source) %>% summarise(SOS=round(mean(SOS)))
-  if(by.year){
-    d.coef <- mutate(d.coef, Year=years[j]) %>% select(Region, Year, intercept, slope)
-    d.gbm <- mutate(d.gbm, Year=years[j]) %>% select(Region, Year, GBM1, BI, CV)
-  }
-  out[[j]] <- list(GBM=d.gbm, data=d.test, LM=d.coef)
-  rm(d.gbm, d.test, d.coef); gc()
-  if(i==1 & n > 1) print(j)
+    if(by.year){ d <- filter(data, Year==years[j]) } else { d <- data; rm(data); gc() }
+    d <- group_by(d, Region, Year) %>% sample_frac(frac) %>% group_by(Region)
+    d.train <- sample_frac(d, 0.9)
+    d.test <- setdiff(d, d.train)
+    d.gbm <- d.train %>% split(.$Region) %>% purrr::map2(n.trees, ~gbm(SOS ~ DOY_TDD05 + DOY_TDD10 + DOY_TDD15 + DOY_TDD20 + x + y + Elev, data=.x,
+      distribution="gaussian", bag.fraction=0.5, cv.folds=5, train.fraction=1,
+      interaction.depth=1, n.minobsinnode=5, n.trees=.y, shrinkage=0.1, verbose=FALSE, keep.data=FALSE, n.cores=1))
+    d.gbm <- d.train %>% group_by %>% select(Region) %>% distinct(Region) %>% mutate(GBM1=d.gbm) %>% group_by(Region)
+    rm(d.train); gc()
+    d.bi <- d.gbm %>% do(BI=get_bi(., model=GBM1, plotDir, suffix=Region, saveplot=F))
+    d.gbm <- data.table(suppressMessages(left_join(d.gbm, d.bi))) %>% group_by(Region)
+    d.preds <- d.gbm %>% do(Predicted=get_preds(., model=GBM1, newdata=d.test, n.trees=BI, type.err="cv")) %>% group_by(Region)
+    d.gbm <- d.gbm %>% mutate(CV=purrr::map(BI, ~.x$CV))
+    d.test$Predicted <- unnest(d.preds)$Predicted
+    d.bias <- d.test %>% nest(-Region) %>% group_by(Region) %>% do(Region=.$Region, Predicted=.$Predicted[[1]], Coef=purrr::map2(.$SOS, .$Predicted, ~lm(.y ~ .x)$coefficients))
+    d.bias <- d.bias %>% do(Region=.$Region, Predicted=.$Predicted, Coef=.$Coef, `Bias corrected`=(.$Predicted-.$Coef[[1]]["(Intercept)"])/.$Coef[[1]][".x"])
+    d.coef <- d.bias %>% select(Region, Coef) %>% unnest(Region) %>% mutate(Coef=purrr::map(.$Coef, ~data.frame(t(.x[[1]])) %>% setnames(c("intercept", "slope")))) %>% unnest
+    d.bias <- d.bias %>% select(-Coef) %>% unnest(Region) %>% unnest
+    d.test <- suppressMessages(left_join(d.test, d.bias, copy=T))
+    rm(d.bias); gc()
+    d.test$Run <- i
+    d.test <- d.test %>% select(Region, Year, Run, SOS, Predicted, `Bias corrected`) %>% setnames(c("Region", "Year", "Run", "Observed", "Predicted", "Bias corrected")) %>%
+      melt(id.vars=c("Region", "Year", "Run"), value.name="SOS") %>% data.table %>% setnames(c("Region", "Year", "Run", "Source", "SOS")) %>%
+      group_by(Region, Year, Run, Source) %>% summarise(SOS=round(mean(SOS)))
+    if(by.year){
+      d.coef <- mutate(d.coef, Year=years[j]) %>% select(Region, Year, intercept, slope)
+      d.gbm <- mutate(d.gbm, Year=years[j]) %>% select(Region, Year, GBM1, BI, CV)
+    }
+    out[[j]] <- list(GBM=d.gbm, data=d.test, LM=d.coef)
+    rm(d.gbm, d.test, d.coef); gc()
+    if(i==1 & n > 1) print(j)
   }
   if(n==1){
     out <- out[[1]]
