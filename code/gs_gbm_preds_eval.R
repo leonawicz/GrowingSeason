@@ -5,9 +5,7 @@ lapply(pkgs, function(x) library(x, character.only=T))
 rasterOptions(tmpdir="/atlas_scratch/mfleonawicz/raster_tmp", chunksize=10e10, maxmemory=10e11)
 load("data.RData") # d, d.stats, d.stats2, d.hm, sos, ecomask, yrs, cbpal
 source("../code/gs_functions.R")
-sw.shp <- shapefile("/big_scratch/mfleonawicz/Alf_Files_20121129/statewide_shape/Alaska_Albers_ESRI.shp")
 dem <- raster("/Data/Base_Data/GIS/GIS_Data/Raster/DEMs/PRISM_2km_DEM/AKCanada_2km_DEM_mosaic.tif") %>% resample(sos)
-dir.create(plotDir <- file.path("../plots/gbm/models"), recursive=T, showWarnings=F)
 sos <- readAll(brick("../data/sos_1982_2010.tif"))
 
 d <- dcast(d, Region + Year + Obs + x + y + SOS ~ Threshold, value.var="TDD")
