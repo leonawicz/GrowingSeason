@@ -16,7 +16,7 @@ set.seed(564)
 n.trees=round(0.25*c(15000, 25000, 40000, 30000, 15000, 5000, 25000, 40000, 5000))
 
 # build gbm models
-gbm_explore <- function(i, data, n.trees, frac, years=sort(unique(d$Year)), by.year=TRUE){
+gbm_explore <- function(i, data, n.trees, frac, years=sort(unique(data$Year)), by.year=TRUE){
   n <- if(by.year) length(years) else 1
   out <- vector("list", n)
   data <- filter(data, Year %in% years)
