@@ -202,8 +202,6 @@ p <- levelplot(s, maxpixels=ncell(s), main=paste("2002 start of Arctic Tundra gr
         latticeExtra::layer(sp.polygons(sw.shp, fill='transparent', alpha=0.3))
 print(p)
 dev.off()
-
-d.gbm %>% do(BI=get_bi(., model=GBM1, plotDir, suffix=Region, saveplot=T))
 ##############################################
 
 system.time({
