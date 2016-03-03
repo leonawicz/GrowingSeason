@@ -13,9 +13,22 @@ d <- mutate(d, Elev=raster::extract(dem, cbind(x, y)))
 setnames(d, c("Region", "Year", "Obs", "x", "y", "SOS", paste0("DOY_TDD", c("05", 10, 15, 20)), "Elev"))
 
 set.seed(564)
-n.trees=round(0.25*c(15000, 25000, 40000, 30000, 15000, 5000, 25000, 40000, 5000))
+n.trees=c(3000, 2500, 4500, 6500, 3000, 1500, 3000, 6000, 1500)
 
 # build gbm models
+get_cv_err <- function(.){
+  k <- 200
+  b <- .$CV[[1]]
+  m <- .$GBM1[[1]]
+  n <- m$n.trees
+  d <- data.table(Trees=1:n, `Training Error`=m$train.error, `CV Error`=m$cv.error)
+  be <- d$`CV Error`[b]
+  d <- melt(d, id="Trees")
+  d <- mutate(d, `Number of Trees`=b, Error=be)
+  setnames(d, c("Number of Trees","Type of Error","Error", "Optimal_Trees", "Optimal_Error"))
+  nest(d, `Number of Trees`, `Type of Error`, `Error`)
+}
+
 gbm_explore <- function(i, data, n.trees, frac, years=sort(unique(data$Year)), by.year=TRUE){
   n <- if(by.year) length(years) else 1
   out <- vector("list", n)
@@ -31,10 +44,15 @@ gbm_explore <- function(i, data, n.trees, frac, years=sort(unique(data$Year)), b
       interaction.depth=1, n.minobsinnode=5, n.trees=.y, shrinkage=0.1, verbose=FALSE, keep.data=FALSE, n.cores=1))
     d.gbm <- d.train %>% group_by %>% select(Region) %>% distinct(Region) %>% mutate(GBM1=d.gbm) %>% group_by(Region)
     rm(d.train); gc()
-    d.bi <- d.gbm %>% do(BI=get_bi(., model=GBM1, plotDir, suffix=Region, saveplot=F))
+    d.bi <- d.gbm %>% do(BI=get_bi(., model=GBM1, plotDir, saveplot=F))
     d.gbm <- data.table(suppressMessages(left_join(d.gbm, d.bi))) %>% group_by(Region)
+    d.gbm <- d.gbm %>% mutate(CV=purrr::map(BI, ~.x$CV)) %>% group_by(Region)
+    d.ri <- d.gbm %>% do(RI=get_ri(., model=GBM1, n.trees=BI, plotDir, saveplot=F))
+    d.gbm <- data.table(suppressMessages(left_join(d.gbm, d.ri))) %>% group_by(Region)
     d.preds <- d.gbm %>% do(Predicted=get_preds(., model=GBM1, newdata=d.test, n.trees=BI, type.err="cv")) %>% group_by(Region)
-    d.gbm <- d.gbm %>% mutate(CV=purrr::map(BI, ~.x$CV))
+    d.err <- d.gbm %>% group_by(Region) %>% do(Error=get_cv_err(.))
+    d.gbm <- suppressMessages(left_join(d.gbm, d.err)) %>% group_by(Region)
+    rm(d.bi, d.ri, d.err); gc()
     d.test$Predicted <- unnest(d.preds)$Predicted
     d.bias <- d.test %>% nest(-Region) %>% group_by(Region) %>% do(Region=.$Region, Predicted=.$Predicted[[1]], Coef=purrr::map2(.$SOS, .$Predicted, ~lm(.y ~ .x)$coefficients))
     d.bias <- d.bias %>% do(Region=.$Region, Predicted=.$Predicted, Coef=.$Coef, `Bias corrected`=(.$Predicted-.$Coef[[1]]["(Intercept)"])/.$Coef[[1]][".x"])
@@ -48,7 +66,7 @@ gbm_explore <- function(i, data, n.trees, frac, years=sort(unique(data$Year)), b
       group_by(Region, Year, Run, Source) %>% summarise(SOS=round(mean(SOS)))
     if(by.year){
       d.coef <- mutate(d.coef, Year=years[j]) %>% select(Region, Year, intercept, slope)
-      d.gbm <- mutate(d.gbm, Year=years[j]) %>% select(Region, Year, GBM1, BI, CV)
+      d.gbm <- mutate(d.gbm, Year=years[j]) %>% select(Region, Year, GBM1, RI, BI, CV, Error)
     }
     out[[j]] <- list(GBM=d.gbm, data=d.test, LM=d.coef)
     rm(d.gbm, d.test, d.coef); gc()
@@ -67,7 +85,9 @@ system.time( dlist <- mclapply(1:32, gbm_explore, d, n.trees=n.trees, frac=0.5, 
 
 # Extract tables of models, CV optimal trees, predictions, corrections, etc.
 gbm.out <- lapply(dlist, "[[", 1)
+ri.out <-  purrr::map2(gbm.out, seq_along(gbm.out), ~select(.x, Region, Year, RI) %>% mutate(Run=.y) %>% unnest) %>% bind_rows %>% filter(Method=="CV")
 cv.out <-  purrr::map(gbm.out, ~select(.x, Region, Year, CV)) %>% bind_rows
+err.out <-  purrr::map2(gbm.out, seq_along(gbm.out), ~select(.x, Region, Year, Error) %>% mutate(Run=.y)) %>% bind_rows %>% unnest
 d.out <- rbindlist(lapply(dlist, "[[", 2))
 lm.out <- lapply(dlist, "[[", 3)
 d.out <- group_by(d.out, Region, Year, Source) %>% summarise(SOS=mean(SOS)) %>% bind_rows(filter(d.out))
@@ -105,7 +125,7 @@ gbm_prediction_maps <- function(d, newdata, r, lm.pars=NULL, output="maps", n.co
 # Run
 pred.maps <- gbm_prediction_maps(gbm.out, d, subset(sos, 1), lm.out, n.cores=4)
 
-save(cv.out, d.out, pred.maps, file="gbm_preds_eval_big.RData") # save all raw predictions maps in case needed
+save(ri.out, cv.out, d.out, pred.maps, file="gbm_preds_eval_big.RData") # save all raw predictions maps in case needed
 
 # Prep specific maps for plotting script
 pred.maps.gbm.samples <- pred.maps[[1]] %>% purrr::map(~calc(.x, mean)) %>% stack
@@ -121,4 +141,32 @@ s1 <- subset(s1, 1)
 sMean <- subset(sMean, 1)
 sMean2002 <- subset(sMean2002, 1)
 
-save(cv.out, d.out, s1, sMean, sMean2002, file="gbm_preds_eval.RData")
+set.seed(1)
+predict_hold_out_year <- function(gbm.out, d, regions, years){
+  inner_fun <- function(gbm.out, d, region, year){
+    d.test <- d %>% filter(Region==region & Year==year) %>% group_by(Region, Year)
+    rep.gbm <- sample(seq_along(gbm.out), length(gbm.out), replace=T)
+    d.preds <- purrr::map2(gbm.out, rep.gbm,
+      ~filter(.x, Region==region & Year!=year) %>% sample_n(1) %>% group_by(Region) %>% do(Predicted=get_preds(., model=GBM1, newdata=d.test, n.trees=BI, type.err="cv") %>% mean)) %>%
+      bind_rows %>% unnest %>% mutate(Region=region, Year=year)
+    d.test <- suppressMessages(summarise(d.test, SOS=mean(SOS)) %>% left_join(d.preds, copy=T))
+    print(paste0(region, ": ", year))
+    d.test
+  }
+  purrr::map(regions, ~purrr::map2(.x, years, ~inner_fun(gbm.out, d, .x, .y)) %>% bind_rows) %>% bind_rows
+}
+
+d.preds <- predict_hold_out_year(gbm.out, d, unique(d$Region), yrs)
+save(ri.out, cv.out, d.out, s1, sMean, sMean2002, d.preds, file="gbm_preds_eval.RData")
+
+err.out2 <- unnest(err.out)
+clrs <- c("black", "royalblue")
+dir.create(plotDir <- file.path("../plots/gbm/models"), recursive=T, showWarnings=F)
+png(file.path(plotDir, paste0("gbm_error.png")), width=3200, height=1600, res=200)
+ggplot(err.out2 %>% filter(Region=="Arctic Tundra" & Run %in% 1:2), aes(`Number of Trees`, Error, group=interaction(Region, Year, Run, `Type of Error`), colour=`Type of Error`)) + geom_line(size=1) +
+  scale_colour_manual("", values=clrs) + ggtitle("predictive error by GBM trees") +
+  geom_point(data=err.out %>% filter(Region=="Arctic Tundra" & Run %in% 1:2), aes(x=Optimal_Trees, y=Optimal_Error, group=NULL, colour=NULL), size=1, colour="black") +
+  geom_text(data=err.out %>% filter(Region=="Arctic Tundra" & Run %in% 1:2), aes(group=NULL, colour=NULL), colour="black") +
+  theme_gray(base_size=16) + theme(legend.position="bottom", legend.box="horizontal", strip.background=element_blank()) +
+  facet_wrap(~Region, ncol=3, scales="free")
+dev.off()
