@@ -5,8 +5,8 @@ lapply(pkgs, function(x) library(x, character.only=T))
 load("data.RData") # d, d.stats, d.stats2, d.hm, sos, ecomask, yrs, cbpal
 load("gbm_preds_eval.RData") # ri.out, cv.out, d.out, s1, sMean, sMean2002
 shpDir <- "C:/github/DataExtraction/data/shapefiles"
-eco_shp <- shapefile(file.path(shpDir, "AK_ecoregions/akecoregions.shp")) %>% spTransform(CRS(projection(sos))) %>%
-  unionSpatialPolygons(eco_shp@data$LEVEL_2)
+eco_shp <- shapefile(file.path(shpDir, "AK_ecoregions/akecoregions.shp")) %>% spTransform(CRS(projection(sos)))
+eco_shp <- unionSpatialPolygons(eco_shp, eco_shp@data$LEVEL_2)
 sw_shp <- shapefile(file.path(shpDir, "Political/Alaska.shp")) %>% spTransform(CRS(projection(sos)))
 dir.create(plotDir <- file.path("../plots/gbm/models"), recursive=T, showWarnings=F)
 
@@ -33,6 +33,52 @@ ggplot(filter(d.out, is.na(Run)) %>% dcast(Region + Year + Run ~ Source, value.v
   #facet_wrap(~Region, ncol=3)
 dev.off()
 
+d.hoy <- d.preds %>% select(-SOS) %>% mutate(Source="Predicted HOY") %>% rename(SOS=Predicted)
+d.hoy <- d.preds %>% select(-Predicted) %>% distinct %>% mutate(Source="Global observed") %>% bind_rows(d.hoy)
+d.ts <- bind_rows(filter(d.out, Source!="Bias corrected"), d.hoy) %>% mutate(Source=factor(Source, levels=c("Observed", "Predicted", "Global observed", "Predicted HOY")))
+
+extract_to_dt <- function(x, y, fun, rcp, gcm, run, ...){
+  raster::extract(x, y, fun, ...) %>% t %>% data.table %>% setnames(names(y)) %>% mutate(Run=run) %>% melt(id.vars="Run", variable.name="Region", value.name="SOS") %>%
+    mutate(Year=as.integer(substr(names(x), 5, 8)), RCP=factor(rcp, levels=c("RCP 6.0", "RCP 8.5")), Model=gcm, Source="Projected") %>% select(RCP, Model, Region, Year, Source, SOS, Run)
+}
+
+load("sos_gbm_preds_GFDL-CM3_test.RData")
+d.proj <- bind_rows(extract_to_dt(b.rcp60.qm, eco_shp, mean, "RCP 6.0", "GFDL-CM3", run=1, na.rm=TRUE), extract_to_dt(b.rcp85.qm, eco_shp, mean, "RCP 8.5", "GFDL-CM3", run=2, na.rm=TRUE))
+load("sos_gbm_preds_IPSL-CM5A-LR.RData")
+d.proj <- bind_rows(d.proj, extract_to_dt(b.rcp60.qm, eco_shp, mean, "RCP 6.0", "IPSL-CM5A-LR", run=3, na.rm=TRUE), extract_to_dt(b.rcp85.qm, eco_shp, mean, "RCP 8.5", "IPSL-CM5A-LR", run=4, na.rm=TRUE))
+load("sos_gbm_preds_MRI-CGCM3.RData")
+d.proj <- bind_rows(d.proj, extract_to_dt(b.rcp60.qm, eco_shp, mean, "RCP 6.0", "MRI-CGCM3", run=5, na.rm=TRUE), extract_to_dt(b.rcp85.qm, eco_shp, mean, "RCP 8.5", "MRI-CGCM3", run=6, na.rm=TRUE))
+d.proj.mean <- d.proj %>% group_by(Region, Year, Source) %>% summarise(SOS=mean(SOS), Run=1)
+d.smooth <- filter(d.ts, is.na(Run) & Source=="Predicted") %>% bind_rows(filter(d.proj, Year > 2010)) %>% group_by(Region, Year) %>% summarise(SOS=mean(SOS), Source="Trend", Run=1)
+
+load("old_sos_preds/sos_gbm_preds_GFDL-CM3.RData")
+d.proj.old <- bind_rows(extract_to_dt(b.rcp60.qm, eco_shp, mean, "RCP 6.0", "GFDL-CM3", run=1, na.rm=TRUE), extract_to_dt(b.rcp85.qm, eco_shp, mean, "RCP 8.5", "GFDL-CM3", run=2, na.rm=TRUE))
+load("old_sos_preds/sos_gbm_preds_IPSL-CM5A-LR.RData")
+d.proj.old <- bind_rows(d.proj.old, extract_to_dt(b.rcp60.qm, eco_shp, mean, "RCP 6.0", "IPSL-CM5A-LR", run=3, na.rm=TRUE), extract_to_dt(b.rcp85.qm, eco_shp, mean, "RCP 8.5", "IPSL-CM5A-LR", run=4, na.rm=TRUE))
+load("old_sos_preds/sos_gbm_preds_MRI-CGCM3.RData")
+d.proj.old <- bind_rows(d.proj.old, extract_to_dt(b.rcp60.qm, eco_shp, mean, "RCP 6.0", "MRI-CGCM3", run=5, na.rm=TRUE), extract_to_dt(b.rcp85.qm, eco_shp, mean, "RCP 8.5", "MRI-CGCM3", run=6, na.rm=TRUE))
+d.proj.old.mean <- d.proj.old %>% group_by(Region, Year, Source) %>% summarise(SOS=mean(SOS), Run=1)
+d.smooth.old <- filter(d.ts, is.na(Run) & Source=="Predicted") %>% bind_rows(filter(d.proj.old, Year > 2010)) %>% group_by(Region, Year) %>% summarise(SOS=mean(SOS), Source="Trend", Run=1)
+
+z <- b.rcp60.qm %>% subset(5:94) %>% stackApply(rep(1:9, each=10), mean) %>% subset(c(2,9)) %>% calc(function(x) x[2]-x[1])
+rTheme <- function(region=colorRampPalette(c("darkred", "firebrick1", "white", "royalblue", "darkblue"))(19), ...){
+  theme <- custom.theme.2(region=region, ...)
+  theme$strip.background$col <- theme$strip.shingle$col <- theme$strip.border$col <- theme$panel.background$col <- theme$axis.line$col <- "transparent"
+  theme
+}
+
+rng <- range(z[], na.rm=T)
+rng <- range(rng, -rng)
+at.vals <- seq(rng[1], rng[2], length=19)
+colkey <- list(at=at.vals, labels=list(labels=round(at.vals), at=at.vals))
+
+#png(file.path(plotDir, paste0(".png")), width=3200, height=1600, res=200)
+p <- levelplot(z, maxpixels=ncell(z), main=paste("2090s - 2010s deltas"),
+  par.settings=rTheme, xlab=NULL, ylab=NULL, scales=list(draw=F), contour=F, margin=F, at=at.vals, colorkey=colkey) +
+  latticeExtra::layer(sp.polygons(sw_shp, fill='transparent', alpha=0.3))
+print(p)
+#dev.off()
+
 # historical predictions over observations time series
 clrs <- c("peru", "royalblue", "black", "red")
 png(file.path(plotDir, paste0("gbm_TSpreds_byRegion.png")), width=3200, height=1600, res=200)
@@ -45,8 +91,45 @@ ggplot(filter(d.out, !is.na(Run) & Source!="Bias corrected"), aes(x=Year, y=SOS,
   geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour=clrs[2], size=1) +
   geom_line(data=filter(d.out, Source=="Observed" & is.na(Run)), colour=clrs[1], size=1) + 
   geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour=clrs[2], size=1, linetype=2) +
-  geom_point(data=d.preds %>% select(-Predicted) %>% distinct, aes(y=SOS, colour=NULL, group=NULL), colour="black", size=3) +
-  geom_point(data=d.preds, aes(y=Predicted, colour=NULL, group=NULL), colour="red", size=1, position=position_jitter(width=0.2, height=0)) +
+  theme_bw() + theme(legend.position="bottom") + ggtitle("Observed and modeled start of growing season") +
+  #scale_x_continuous(breaks=c(1982,1990,2000,2010)) +
+  guides(fill=guide_legend(override.aes=list(alpha=1)), colour=guide_legend(override.aes=list(alpha=1))) +
+  facet_wrap(~Region, ncol=3, scales="free")
+dev.off()
+
+# historical predictions over observations time series
+clrs <- c("peru", "royalblue", "black", "red")
+png(file.path(plotDir, paste0("gbm_TSpreds_byRegion_plusGCMs.png")), width=3200, height=1600, res=200)
+ggplot(filter(d.out, !is.na(Run) & Source!="Bias corrected"), aes(x=Year, y=SOS, colour=Source, group=interaction(Source, Run))) +
+  scale_color_manual(values=clrs) + 
+  geom_line(size=1, alpha=0.25) +
+  #geom_line(data=filter(d.out, Source=="Bias corrected" & is.na(Run)), colour="#B8860B", size=1, linetype=1) +
+  geom_line(data=filter(d.out, Source=="Observed" & is.na(Run)), colour="black", size=2) + 
+  geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour="black", size=2) +
+  geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour=clrs[2], size=1) +
+  geom_line(data=filter(d.out, Source=="Observed" & is.na(Run)), colour=clrs[1], size=1) + 
+  geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour=clrs[2], size=1, linetype=2) +
+  geom_line(data=d.proj.old, colour="#00000030", size=1) + 
+  geom_smooth(data=d.smooth.old) +
+  theme_bw() + theme(legend.position="bottom") + ggtitle("Observed and modeled start of growing season") +
+  #scale_x_continuous(breaks=c(1982,1990,2000,2010)) +
+  guides(fill=guide_legend(override.aes=list(alpha=1)), colour=guide_legend(override.aes=list(alpha=1))) +
+  facet_wrap(~Region, ncol=3, scales="free")
+dev.off()
+
+# historical predictions over observations time series, plus predictions on withheld years
+png(file.path(plotDir, paste0("gbm_TSpreds_byRegion_HOY.png")), width=3200, height=1600, res=200)
+ggplot(filter(d.ts, !is.na(Run) & !(Source %in% c("Bias corrected", "Global observed", "Predicted HOY"))), aes(x=Year, y=SOS, colour=Source, group=interaction(Source, Run))) +
+  scale_color_manual(values=clrs[c(3,1,2,4)]) + 
+  geom_line(size=1, alpha=0.25) +
+  #geom_line(data=filter(d.out, Source=="Bias corrected" & is.na(Run)), colour="#B8860B", size=1, linetype=1) +
+  geom_line(data=filter(d.out, Source=="Observed" & is.na(Run)), colour="black", size=2) + 
+  geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour="black", size=2) +
+  geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour=clrs[2], size=1) +
+  geom_line(data=filter(d.out, Source=="Observed" & is.na(Run)), colour=clrs[1], size=1) + 
+  geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour=clrs[2], size=1, linetype=2) +
+  geom_point(data=d.ts %>% filter(Source=="Global observed"), aes(group=NULL), size=3) +
+  geom_point(data=d.ts %>% filter(Source=="Predicted HOY"), size=1, position=position_jitter(width=0.2, height=0)) +
   theme_bw() + theme(legend.position="bottom") + ggtitle("Observed and modeled start of growing season") +
   scale_x_continuous(breaks=c(1982,1990,2000,2010)) +
   guides(fill=guide_legend(override.aes=list(alpha=1)), colour=guide_legend(override.aes=list(alpha=1))) +

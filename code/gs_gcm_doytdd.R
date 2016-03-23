@@ -44,28 +44,30 @@ qmap <- function(i, x0=NULL, x1, deltas, map.by="value", non.negative=TRUE){
 hist.info <- prep_files(list.files("ar5_daily_tas/historical", pattern="\\.tif$", full=TRUE))
 rcp60.info <- prep_files(list.files("ar5_daily_tas/rcp60", pattern="\\.tif$", full=TRUE))
 rcp85.info <- prep_files(list.files("ar5_daily_tas/rcp85", pattern="\\.tif$", full=TRUE))
-r <- raster("sos_1982_2010.tif")
+sos <- readAll(brick("sos_1982_2010.tif"))
+r <- calc(sos, mean)
 clim <- raster("clim_tdd_1979_2010.tif") %>% projectRaster(r) %>% crop(r) %>% mask(r)
-doytdd0 <- lapply(list.files(pattern="^pct.*.tif$", full=TRUE), function(x, r) brick(x) %>% projectRaster(r) %>% crop(r) %>% mask(r), r=r)
-doytdd0.qtiles <- lapply(doytdd0, function(x) calc(x, function(x, ...) quantile(x, seq(0.01, 1, by=0.01), ...), na.rm=T))
+doytdd0 <- mclapply(list.files(pattern="^pct.*.tif$", full=TRUE), function(x, r) brick(x) %>% projectRaster(r) %>% crop(r) %>% mask(r), r=r, mc.cores=4)
+doytdd0.qtiles <- mclapply(doytdd0, function(x) calc(x, function(x, ...) quantile(x, seq(0.01, 1, by=0.01), ...), na.rm=T), mc.cores=4)
+n <- length(doytdd0)
 
 # @knitr processing
 for(k in 1:length(hist.info$files)){
     doytdd1 <- mclapply(1:length(hist.info$files[[k]]), get_DOYTDDpct, files=hist.info$files[[k]], clim=clim, r=r, mc.cores=16)
     names(doytdd1) <- hist.info$labs[[k]]
-    doytdd1 <- lapply(zip_n(doytdd1), stack)
-    doytdd1.qtiles <- lapply(doytdd1, function(x) calc(x, function(x, ...) quantile(x, seq(0.01, 1, by=0.01), ...), na.rm=T))
-    doytdd.deltas <- lapply(1:length(doytdd0), function(i, x, y) y[[i]] - x[[i]], x=doytdd0.qtiles, y=doytdd1.qtiles) # deltas
-    doytdd1.mapped <- mclapply(1:length(doytdd0), qmap, x1=doytdd1, deltas=doytdd.deltas, map.by="quantile", mc.cores=length(doytdd0)) # historical mapped
+    doytdd1 <- map(transpose(doytdd1), stack)
+    doytdd1.qtiles <- mclapply(doytdd1, function(x) calc(x, function(x, ...) quantile(x, seq(0.01, 1, by=0.01), ...), na.rm=T), mc.cores=n)
+    doytdd.deltas <- mclapply(1:n, function(i, x, y) y[[i]] - x[[i]], x=doytdd0.qtiles, y=doytdd1.qtiles, mc.cores=n) # deltas
+    doytdd1.mapped <- mclapply(1:n, qmap, x1=doytdd1, deltas=doytdd.deltas, map.by="quantile", mc.cores=n) # historical mapped
     gc()
     doytdd.rcp60 <- mclapply(1:length(rcp60.info$files[[k]]), get_DOYTDDpct, files=rcp60.info$files[[k]], clim=clim, r=r, mc.cores=20)
     names(doytdd.rcp60) <- rcp60.info$labs[[k]]
-    doytdd.rcp60 <- lapply(zip_n(doytdd.rcp60), stack)
+    doytdd.rcp60 <- lapply(transpose(doytdd.rcp60), stack)
     doytdd.rcp60.mapped <- mclapply(1:length(doytdd0), qmap, x0=doytdd1, x1=doytdd.rcp60, deltas=doytdd.deltas, mc.cores=length(doytdd0)) # rcp60 mapped
     gc()
     doytdd.rcp85 <- mclapply(1:length(rcp85.info$files[[k]]), get_DOYTDDpct, files=rcp85.info$files[[k]], clim=clim, r=r, mc.cores=20)
     names(doytdd.rcp85) <- rcp85.info$labs[[k]]
-    doytdd.rcp85 <- lapply(zip_n(doytdd.rcp85), stack)
+    doytdd.rcp85 <- lapply(transpose(doytdd.rcp85), stack)
     doytdd.rcp85.mapped <- mclapply(1:length(doytdd0), qmap, x0=doytdd1, x1=doytdd.rcp85, deltas=doytdd.deltas, mc.cores=length(doytdd0)) # rcp85 mapped
     names(doytdd0) <- names(doytdd1.mapped) <- names(doytdd.rcp60.mapped) <- names(doytdd.rcp85.mapped) <- names(doytdd1)
     save(doytdd0, doytdd1, doytdd1.mapped, doytdd.rcp60, doytdd.rcp60.mapped, doytdd.rcp85, doytdd.rcp85.mapped, file=paste0("../workspaces/doytdd_qmap_", hist.info$models[k], ".RData"))

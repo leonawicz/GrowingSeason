@@ -62,6 +62,41 @@ get_preds <- function(data, model, newdata, n.trees, type.err="test"){
     predict(m, newdata=newdata, n.trees=n.trees)
 }
 
+# make data table of TDD map values
+make_TDD_dt <- function(d, extractBy, y, keep.y=FALSE, years=NULL, dem, ...){
+  inner_fun <- function(d, extractBy, y, keep.y=FALSE, years=NULL){
+    if(is.null(years)) years <- 1:nlayers(d)
+    d[d <= 1] <- NA
+    r <- calc(y, mean)
+    cells <- which(!is.na(r[]))
+    d <- projectRaster(d, r) %>% resample(r, method="bilinear") %>% mask(r) %>% raster::extract(extractBy, cellnumbers=TRUE)
+    s <- raster::extract(y, extractBy)
+    d <- rbindlist(lapply(1:length(d),
+      function(i, tdd, sos, years, eco, shp, mask){
+        cells <- as.numeric(tdd[[i]][,1])
+        xy <- xyFromCell(mask, cells)
+        x <- data.table(Region=eco[i], Year=rep(years, each=nrow(tdd[[i]])), SOS=NA, TDD=as.numeric(tdd[[i]][,-1]), x=xy[,1], y=xy[,2], Cell=cells)
+        idx <- which(x$Year %in% 1982:2010)
+        x$SOS[idx] <- as.numeric(sos[[i]])
+        x
+      }, tdd=d, sos=s, years=years, eco=names(extractBy), shp=extractBy, mask=r))
+    cells <- intersect(cells, (group_by(d, Cell) %>% summarise(n=n()) %>% filter(n==length(years)))$Cell)
+    filter(d, Cell %in% cells)
+  }
+  d <- mclapply(d, inner_fun, extractBy=extractBy, y=y, keep.y=keep.y, years=years, ...)
+  cells <- sort(unique(unlist(purrr::map(d, ~.x$Cell))))
+  d <- d %>% purrr::map2(c("05",10,15,20), ~mutate(.x, Threshold=paste0(.y, "pct"))) %>% bind_rows() %>% filter(Cell %in% cells) %>% group_by(Region, Year, Threshold) %>%
+    mutate(Obs=1:n()) %>% select(Region, Year, Threshold, Obs, x, y, Cell, SOS, TDD) %>% group_by %>% mutate(Elev=raster::extract(dem, cbind(x, y))) %>%
+    dcast(Region + Year + Obs + x + y + Cell + Elev + SOS ~ Threshold, value.var="TDD") %>% data.table
+  nam <- c("Region", "Year", "Obs", "x", "y", "Cell", "Elev", "SOS", paste0("DOY_TDD", c("05", 10, 15, 20)))
+  if(!keep.y){
+    d <- select(d, -SOS)
+    nam <- nam[-which(nam=="SOS")]
+  }
+  setnames(d, nam)
+  d
+}
+
 # Partial dependence
 get_pd <- function(data=NULL, source_data, x, y=NULL, model, outDir, vars=NULL, n.vars=length(vars), order.by.ri=TRUE, density.adjust=2, spline.df=12, prefix="", suffix="", saveplot=TRUE, ...){
     if(is.null(data) & class(model)!="gbm") stop("Must pass a gbm object to 'model' if not using a gbm data table for 'data'.")

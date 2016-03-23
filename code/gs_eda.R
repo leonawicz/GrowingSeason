@@ -9,6 +9,7 @@
 # @knitr setup
 setwd("C:/github/GrowingSeason/workspaces")
 plotDir <- "../plots"
+source("../code/gs_functions.R")
 
 library(rasterVis)
 library(maptools)
@@ -21,6 +22,8 @@ cbpal <- c("#8B4500", "#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0
 
 # Start of season map
 sos <- brick("../data/sos_1982_2010.tif")
+r <- calc(sos, mean)
+dem <- raster("/Data/Base_Data/GIS/GIS_Data/Raster/DEMs/PRISM_2km_DEM/AKCanada_2km_DEM_mosaic.tif") %>% resample(r)
 
 # Threshold thaw degree days maps
 tdd05 <- dropLayer(brick("../data/pct05_tdd_spring_1979_2010.tif"), 1:3)
@@ -37,26 +40,7 @@ eco_IDs <- sapply(slot(eco_shp, "polygons"), function(x) slot(x, "ID"))
 ecomask <- rasterize(eco_shp, sos)
 
 # @knitr data_prep
-make_TDD_df <- function(d, extractBy, y){
-    d[d <= 1] <- NA
-    d %>% projectRaster(y) %>% resample(y, method="bilinear") %>% mask(y) %>% extract(extractBy, cellnumbers=TRUE) -> d
-    s <- extract(y, extractBy)
-    d <- rbindlist(lapply(1:length(d),
-        function(i, tdd, sos, years, eco, shp, mask){
-            xy <- xyFromCell(mask, as.numeric(tdd[[i]][,1]))
-            data.table(Region=eco[i], Year=rep(years, each=nrow(tdd[[i]])), SOS=as.numeric(sos[[i]]), TDD=as.numeric(tdd[[i]][,-1]), x=xy[,1], y=xy[,2])
-        }, tdd=d, sos=s, years=yrs, eco=eco_IDs, shp=extractBy, mask=y))
-    d[!is.na(SOS) & !is.na(TDD),]
-}
-
-d <- lapply(list(tdd05, tdd10, tdd15, tdd20), make_TDD_df, extractBy=eco_shp, y=sos)
-lapply(1:length(d), function(i, x, pct) x[[i]][, Threshold := pct[i]], x=d, pct=paste0(c("05",10,15,20), "pct"))
-d <- rbindlist(d)
-tmp <- with(d, paste(Region, Threshold, Year))
-tmp <- as.numeric(lapply(split(tmp, tmp), length))
-setorder(d, Region, Threshold, Year)
-d[, Obs := unlist(lapply(tmp, function(x) 1:x))]
-setcolorder(d, c("Region", "Year", "Threshold", "Obs", "x", "y", "SOS", "TDD"))
+d <- make_TDD_dt(list(tdd05, tdd10, tdd15, tdd20), extractBy=eco_shp, y=sos, keep.y=TRUE, years=1982:2010, dem=dem)
 
 d.stats <- group_by(d, Threshold, Region) %>%
     summarise(Min=min(TDD, na.rm=T),
