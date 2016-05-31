@@ -3,12 +3,12 @@ pkgs <- list("rasterVis", "maptools", "ggplot2", "data.table", "dplyr", "tidyr")
 lapply(pkgs, function(x) library(x, character.only=T))
 
 load("data.RData") # d, d.stats, d.stats2, d.hm, sos, ecomask, yrs, cbpal
-load("gbm_preds_eval.RData") # ri.out, cv.out, d.out, s1, sMean, sMean2002
+load("gbm_preds_eval_final.RData") # ri.out, cv.out, pd.out, d.out, s1, sMean, sMean2002
 shpDir <- "C:/github/DataExtraction/data/shapefiles"
 eco_shp <- shapefile(file.path(shpDir, "AK_ecoregions/akecoregions.shp")) %>% spTransform(CRS(projection(sos)))
 eco_shp <- unionSpatialPolygons(eco_shp, eco_shp@data$LEVEL_2)
 sw_shp <- shapefile(file.path(shpDir, "Political/Alaska.shp")) %>% spTransform(CRS(projection(sos)))
-dir.create(plotDir <- file.path("../plots/gbm/models"), recursive=T, showWarnings=F)
+dir.create(plotDir <- file.path("../plots/gbm/final"), recursive=T, showWarnings=F)
 
 # Spatial Summaries
 # CV optimal trees distribution boxplots
@@ -19,10 +19,9 @@ dev.off()
 
 # Relative influence by year and region
 png(file.path(plotDir, paste0("gbm_RI_byRegion.png")), width=1600, height=1600, res=200)
-ggplot(ri.out %>% group_by(Region, Year, Predictor) %>% summarise(RI=mean(RI)), aes(factor(Year), RI, fill=Predictor)) + geom_bar(stat="identity", position="stack") +
+ggplot(ri.out %>% group_by(Region, Predictor) %>% summarise(RI=mean(RI)), aes(Region, RI, fill=Predictor)) + geom_bar(stat="identity", position="stack") +
   scale_fill_manual(values=cbpal[-2]) + theme_bw(base_size=10) + theme(legend.position="bottom") + coord_flip() +
-  ggtitle(paste("Predictor relative influence on start of growing season")) +
-  facet_wrap(~Region, ncol=5)
+  ggtitle(paste("Predictor relative influence on start of growing season")) #+ facet_wrap(~Region, ncol=5)
 dev.off()
 
 # gbm observed vs. fitted values
@@ -32,6 +31,25 @@ ggplot(filter(d.out, is.na(Run)) %>% dcast(Region + Year + Run ~ Source, value.v
   theme_bw() + theme(legend.position="bottom") + labs(title="Observed vs. fitted values", x="Predicted", y="Observed") #+
   #facet_wrap(~Region, ncol=3)
 dev.off()
+
+# partial dependence
+pd <- pd.out %>% mutate(Var2=substr(Var, 1, 16)) %>% group_by(Region, Var2) %>% mutate(Ymin=min(Prob))
+pd.mean <- summarise(pd, Mean_RI=round(mean(as.numeric(substr(Var, 17, nchar(Var)))), 1))
+pd <- left_join(pd, pd.mean)
+pd <- group_by(pd) %>% mutate(Var=paste0(Var2, Mean_RI)) %>% select(-Var2, -Mean_RI)
+
+save_pdplot <- function(x, outDir){
+  region <- gsub(" ", "", unique(x$Region))
+  g <- ggplot(x, aes(x=Val)) + facet_wrap(~Var, ncol=2, scales="free") + labs(x="x", y="y")
+  g <- g + geom_ribbon(aes(ymin=Ymin, ymax=Prob, group=Run), fill="orange", alpha=0.2) + geom_line(aes(x=x, y=y, group=Run), size=1, alpha=0.2)
+  png(file.path(outDir, paste0("gbm_PD_", region, ".png")), width=2000, height=2000, res=200)
+  print(g)
+  dev.off()
+}
+
+pd %>% split(.$Region) %>% purrr::walk(~save_pdplot(.x, outDir=plotDir))
+
+#################################
 
 d.hoy <- d.preds %>% select(-SOS) %>% mutate(Source="Predicted HOY") %>% rename(SOS=Predicted)
 d.hoy <- d.preds %>% select(-Predicted) %>% distinct %>% mutate(Source="Global observed") %>% bind_rows(d.hoy)

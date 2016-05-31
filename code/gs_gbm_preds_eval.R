@@ -21,7 +21,10 @@ cells <- (d %>% group_by(Cell) %>% summarise(Region=unique(Region), n=n()) %>% f
 d <- filter(d, Cell %in% cells)
 
 set.seed(564)
-n.trees=(0.25)*c(3000, 2500, 4500, 6500, 3000, 1500, 3000, 6000, 1500)
+n.trees <- 1200 #(0.5)*c(3000, 2500, 4500, 6500, 3000, 1500, 3000, 6000, 1500)
+#shrink <- rep(0.2, 9) #c(0.029872457, 0.014395137, 0.133199817, 0.119391448, 0.040367520, 0.005136854, 0.022135554, 0.200000000, 0.011665086)
+shrink <- c(0.03808634, 0.01393819, 0.11464891, 0.11070950, 0.04268367, 0.01483978, 0.08393778, 0.20000000, 0.06569468)
+frac <- c(rep(0.1, 5), .5, .5, .1, .5)
 
 # build gbm models
 get_cv_err <- function(.){
@@ -37,20 +40,26 @@ get_cv_err <- function(.){
   nest(d, `Number of Trees`, `Type of Error`, `Error`)
 }
 
-gbm_explore <- function(i, data, n.trees, frac, years=sort(unique(data$Year)), by.year=TRUE){
+gbm_explore <- function(i, data, n.trees, shrinkage, frac, years=sort(unique(data$Year)), by.year=TRUE, agg=FALSE){
   n <- if(by.year) length(years) else 1
   out <- vector("list", n)
   data <- filter(data, Year %in% years)
   gc()
+  if(length(frac)==1) frac <- rep(frac, length(unique(d$Region)))
   for(j in seq_along(out)){
     if(by.year){ d <- filter(data, Year==years[j]) } else { d <- data; rm(data); gc() }
-    d <- group_by(d, Region, Year) %>% sample_frac(frac) %>% group_by(Region)
-    d.train <- sample_frac(d, 0.9)
+    #d <- group_by(d, Region, Year) %>% sample_frac(frac) %>% group_by(Region)
+    d <- d %>% split(.$Region) %>% purrr::map2(frac, ~group_by(.x, Year) %>% sample_frac(.y)) %>% bind_rows %>% data.table %>% group_by(Region)
+    if(agg && !by.year) d <- group_by(d, Region, Year) %>% summarise(SOS=mean(SOS), DOY_TDD05=mean(DOY_TDD05), DOY_TDD10=mean(DOY_TDD10), DOY_TDD15=mean(DOY_TDD15), DOY_TDD20=mean(DOY_TDD20)) %>% group_by(Region)
+    d.train <- sample_frac(d, 0.5)
     d.test <- setdiff(d, d.train)
-    d.gbm <- d.train %>% split(.$Region) %>% purrr::map2(n.trees, ~gbm(SOS ~ DOY_TDD05 + DOY_TDD10 + DOY_TDD15 + DOY_TDD20, data=.x,
+    d.gbm <- d.train %>% split(.$Region) %>% purrr::map2(shrinkage, ~gbm(SOS ~ DOY_TDD05 + DOY_TDD10 + DOY_TDD15 + DOY_TDD20, data=.x,
       distribution="gaussian", bag.fraction=0.5, cv.folds=5, train.fraction=1,
-      interaction.depth=1, n.minobsinnode=5, n.trees=.y, shrinkage=0.2, verbose=FALSE, keep.data=FALSE, n.cores=1))
+      interaction.depth=1, n.minobsinnode=5, n.trees=n.trees, shrinkage=.y, verbose=FALSE, keep.data=FALSE, n.cores=1))
     d.gbm <- d.train %>% group_by %>% select(Region) %>% distinct(Region) %>% mutate(GBM1=d.gbm) %>% group_by(Region)
+    
+    d.tdd <- select(d.train, -Obs, -Year, -Cell) %>% melt(id.vars=c("Region", "SOS"), variable.name="Var", value.name="Val") %>% group_by(Region, Var)
+    
     rm(d.train); gc()
     d.bi <- d.gbm %>% do(BI=get_bi(., model=GBM1, plotDir, saveplot=F))
     d.gbm <- data.table(suppressMessages(left_join(d.gbm, d.bi))) %>% group_by(Region)
@@ -61,6 +70,11 @@ gbm_explore <- function(i, data, n.trees, frac, years=sort(unique(data$Year)), b
     d.err <- d.gbm %>% group_by(Region) %>% do(Error=get_cv_err(.))
     d.gbm <- suppressMessages(left_join(d.gbm, d.err)) %>% group_by(Region)
     rm(d.bi, d.ri, d.err); gc()
+    
+    d.pd <- d.gbm %>% do(PD=get_pd(., source_data=d.tdd, x=Val, y=SOS, outDir=NULL, model=GBM1, vars=1:4, order.by.ri=TRUE, suffix=Region, saveplot=FALSE)) %>% group_by(Region)
+    d.gbm <- data.table(left_join(d.gbm, d.pd)) %>% group_by(Region)
+    rm(d.tdd); gc()
+    
     d.test$Predicted <- unnest(d.preds)$Predicted
     d.bias <- d.test %>% nest(-Region) %>% group_by(Region) %>% do(Region=.$Region, Predicted=.$Predicted[[1]], Coef=purrr::map2(.$SOS, .$Predicted, ~lm(.y ~ .x)$coefficients))
     d.bias <- d.bias %>% do(Region=.$Region, Predicted=.$Predicted, Coef=.$Coef, `Bias corrected`=(.$Predicted-.$Coef[[1]]["(Intercept)"])/.$Coef[[1]][".x"])
@@ -74,7 +88,7 @@ gbm_explore <- function(i, data, n.trees, frac, years=sort(unique(data$Year)), b
       group_by(Region, Year, Run, Source) %>% summarise(SOS=round(mean(SOS)))
     if(by.year){
       d.coef <- mutate(d.coef, Year=years[j]) %>% select(Region, Year, intercept, slope)
-      d.gbm <- mutate(d.gbm, Year=years[j]) %>% select(Region, Year, GBM1, RI, BI, CV, Error)
+      d.gbm <- mutate(d.gbm, Year=years[j]) %>% select(Region, Year, GBM1, RI, BI, CV, Error, PD)
     }
     out[[j]] <- list(GBM=d.gbm, data=d.test, LM=d.coef)
     rm(d.gbm, d.test, d.coef); gc()
@@ -89,9 +103,23 @@ gbm_explore <- function(i, data, n.trees, frac, years=sort(unique(data$Year)), b
 }
 
 # Run
-system.time( dlist <- mclapply(1:32, gbm_explore, d, n.trees=n.trees, frac=0.25, by.year=T, mc.cores=32) )
+system.time( dlist <- mclapply(1:32, gbm_explore, d, n.trees=n.trees, shrinkage=shrink, frac=frac, by.year=FALSE, agg=FALSE, mc.cores=32) )
 
 # Extract tables of models, CV optimal trees, predictions, corrections, etc.
+gbm.out <- lapply(dlist, "[[", 1)
+ri.out <-  purrr::map2(gbm.out, seq_along(gbm.out), ~select(.x, Region, RI) %>% mutate(Run=.y) %>% unnest) %>% bind_rows %>% filter(Method=="CV")
+cv.out <-  purrr::map(gbm.out, ~select(.x, Region, CV)) %>% bind_rows
+err.out <-  purrr::map2(gbm.out, seq_along(gbm.out), ~select(.x, Region, Error) %>% mutate(Run=.y)) %>% bind_rows %>% unnest
+pd.out <-  purrr::map2(gbm.out, seq_along(gbm.out), ~group_by(.x) %>% select(PD) %>% mutate(Run=.y)) %>% bind_rows %>% unnest
+d.out <- rbindlist(lapply(dlist, "[[", 2))
+lm.out <- lapply(dlist, "[[", 3)
+d.out <- group_by(d.out, Region, Year, Source) %>% summarise(SOS=mean(SOS)) %>% bind_rows(filter(d.out))
+
+save(ri.out, cv.out, pd.out, d.out, file="gbm_preds_eval_final.RData")
+
+# Run
+system.time( dlist <- mclapply(1:32, gbm_explore, d, n.trees=n.trees, frac=0.25, by.year=TRUE, mc.cores=32) )
+
 gbm.out <- lapply(dlist, "[[", 1)
 ri.out <-  purrr::map2(gbm.out, seq_along(gbm.out), ~select(.x, Region, Year, RI) %>% mutate(Run=.y) %>% unnest) %>% bind_rows %>% filter(Method=="CV")
 cv.out <-  purrr::map(gbm.out, ~select(.x, Region, Year, CV)) %>% bind_rows
@@ -134,11 +162,12 @@ gbm_prediction_maps <- function(d, newdata, r, lm.pars=NULL, output="maps", n.co
   b
 }
 
-gbm_prediction_maps <- function(newdata, d, r, year.method="match", lm.pars=NULL, output="maps", simplify=TRUE, n.cores=32){
+gbm_prediction_maps <- function(newdata, d, r, year.method="match", lm.pars=NULL, output="maps", simplify=TRUE, agg=FALSE, agg.frac=0.05, n.cores=32){
   yrs <- sort(unique(newdata$Year))
-  gbm.yrs <- sort(unique(d[[1]]$Year))
+  if("Year" %in% names(d[[1]])) gbm.yrs <- sort(unique(d[[1]]$Year))
   grp <- if("Year" %in% names(d[[1]])) list("Region", "Year") else list("Region")
-  if("Year" %in% names(d[[1]])) newdata <- arrange(newdata, Year, Region, Obs)
+  newdata <- if("Year" %in% names(d[[1]])) arrange(newdata, Year, Region, Obs) else arrange(newdata, Region, Year, Obs)
+  if(agg) newdata <- group_by(newdata, Region, Year) %>% sample_frac(agg.frac) %>% summarise(Cell=Region[1], DOY_TDD05=mean(DOY_TDD05), DOY_TDD10=mean(DOY_TDD10), DOY_TDD15=mean(DOY_TDD15), DOY_TDD20=mean(DOY_TDD20)) %>% group_by(Region) # for point models
   if(year.method=="match"){
     d <- mclapply(seq_along(d), function(i, x) x[[i]] %>% group_by_(.dots=grp) %>% do(Predicted=as.integer(round(get_preds(., model=GBM1, newdata=newdata, n.trees=BI, type.err="cv")))) %>% mutate(Run=i), x=d, mc.cores=n.cores)
   } else if(year.method=="random"){
@@ -152,7 +181,7 @@ gbm_prediction_maps <- function(newdata, d, r, year.method="match", lm.pars=NULL
     d <- d %>% purrr::map2(lm.pars, ~suppressMessages(left_join(.x, .y, copy=T)))
     d <- d %>% purrr::map(~unnest(.x) %>% mutate(`Bias corrected`=(Predicted-intercept)/slope) %>% nest(Cell, Predicted, `Bias corrected`) %>% group_by(Region, Year, Run))
   }
-  if(output=="table") return(bind_rows(d))
+  if(output=="table" || agg) return(bind_rows(d)) # for point models
   gc()
   setPred <- function(d, r, values){
     d2 <- select_(d, .dots=list(paste0("`", values, "`"), "Cell")) %>% unnest
@@ -188,12 +217,12 @@ set.seed(1)
 system.time({
 for(i in seq_along(rcps)){
   for(j in seq_along(models)){
-    d.gcm <- d.tdd %>% data.table %>% filter(RCP==rcps[i] & Model==models[j]) %>% select(-RCP, -Model, -x, -y, -Elev, -SOS)
-    pred.maps[[i]][[j]] <- gbm_prediction_maps(d.gcm, gbm.out[1:10], r, year.method="random", n.cores=10)
+    d.gcm <- d.tdd %>% data.table %>% filter(RCP %in% c("Historical", rcps[i]) & Model==models[j]) %>% select(-RCP, -Model, -x, -y, -Elev, -SOS)
+    pred.maps[[i]][[j]] <- gbm_prediction_maps(d.gcm, gbm.out[1:10], r, agg=FALSE, n.cores=10)
   }
 }
 })
-saveRDS(pred.maps, file="/atlas_scratch/mfleonawicz/projects/GrowingSeason/workspaces/gbm_preds_gcm_all.RData") 
+saveRDS(pred.maps, file="/atlas_scratch/mfleonawicz/projects/GrowingSeason/workspaces/gbm_preds_gcm_all_TEST.RData") 
 
 set.seed(1)
 n <- 10
@@ -230,11 +259,29 @@ extract_to_dt <- function(x, y, fun, rcp, gcm, n.cores=32){
   mclapply(seq_along(x), f, x=x, y=y, fun=fun, rcp=rcp, gcm=gcm, mc.cores=n.cores) %>% bind_rows
 }
 
+# for point models
+extract_to_dt <- function(x, y, fun, rcp, gcm, n.cores=32){
+  x <- x[[rcp]][[gcm]]
+  f <- function(i, ...){
+    x <- if(is.data.frame(x[[i]])) rename(unnest(x[[i]]), SOS=Predicted) %>% select(-Cell) else raster::extract(x[[i]], y, fun, na.rm=TRUE) %>% t %>% data.table %>% setnames(names(y)) %>% mutate(Run=i) %>%
+        melt(id.vars="Run", variable.name="Region", value.name="SOS") %>% mutate(Year=as.integer(substr(names(x[[i]]), 2, 5)))
+    x <- mutate(x, RCP=factor(rcp, levels=c("RCP 6.0", "RCP 8.5")), Model=gcm, Source="Projected") %>% select(RCP, Model, Region, Year, Source, SOS, Run)
+    x
+  }
+  if(is.data.frame(x)) x <- list(x)
+  mclapply(seq_along(x), f, x=x, y=y, fun=fun, rcp=rcp, gcm=gcm, mc.cores=n.cores) %>% bind_rows
+}
+
 d.hoy <- d.preds %>% select(-SOS) %>% mutate(Source="Predicted HOY") %>% rename(SOS=Predicted)
 d.hoy <- d.preds %>% select(-Predicted) %>% distinct %>% mutate(Source="Global observed") %>% bind_rows(d.hoy)
 d.ts <- bind_rows(filter(d.out, Source!="Bias corrected"), d.hoy) %>% mutate(Source=factor(Source, levels=c("Observed", "Predicted", "Global observed", "Predicted HOY")))
 
-d.proj <- extract_to_dt(pred.maps, eco_shp, mean, "RCP 6.0", "GFDL-CM3")
+d.proj1 <- extract_to_dt(pred.maps, eco_shp, mean, "RCP 6.0", "GFDL-CM3")
+d.proj2 <- extract_to_dt(pred.maps, eco_shp, mean, "RCP 6.0", "IPSL-CM5A-LR")
+d.proj3 <- extract_to_dt(pred.maps, eco_shp, mean, "RCP 6.0", "MRI-CGCM3")
+d.proj4 <- extract_to_dt(pred.maps, eco_shp, mean, "RCP 8.5", "GFDL-CM3")
+d.proj5 <- extract_to_dt(pred.maps, eco_shp, mean, "RCP 8.5", "IPSL-CM5A-LR")
+d.proj6 <- extract_to_dt(pred.maps, eco_shp, mean, "RCP 8.5", "MRI-CGCM3")
 
 d.proj.mean <- d.proj %>% group_by(Region, Year, Source) %>% summarise(SOS=mean(SOS), Run=1)
 d.smooth <- filter(d.ts, is.na(Run) & Source=="Predicted") %>% bind_rows(filter(d.proj, Year > 2010)) %>% group_by(Region, Year) %>% summarise(SOS=mean(SOS), Source="Trend", Run=1)
@@ -242,8 +289,8 @@ d.smooth <- filter(d.ts, is.na(Run) & Source=="Predicted") %>% bind_rows(filter(
 dir.create(plotDir <- file.path("../plots/gbm/models"), recursive=T, showWarnings=F)
 
 # historical predictions over observations time series
-clrs <- c("peru", "royalblue", "black", "red")
-png(file.path(plotDir, paste0("gbm_TSpreds_byRegion_plusGCMs.png")), width=3200, height=1600, res=200)
+clrs <- c("peru", "royalblue", "#8B451320", "#00008B20", "#FF303020")
+png(file.path(plotDir, paste0("gbm_TSpreds_byRegion_plusRCP60_01pctSample.png")), width=3200, height=1600, res=200)
 ggplot(filter(d.out, !is.na(Run) & Source!="Bias corrected"), aes(x=Year, y=SOS, colour=Source, group=interaction(Source, Run))) +
   scale_color_manual(values=clrs) + 
   geom_line(size=1, alpha=0.25) +
@@ -253,12 +300,14 @@ ggplot(filter(d.out, !is.na(Run) & Source!="Bias corrected"), aes(x=Year, y=SOS,
   geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour=clrs[2], size=1) +
   geom_line(data=filter(d.out, Source=="Observed" & is.na(Run)), colour=clrs[1], size=1) + 
   geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour=clrs[2], size=1, linetype=2) +
-  geom_line(data=d.proj, colour="#00000030", size=1) + 
-  geom_smooth(data=d.smooth) +
+  geom_line(data=d.proj1 %>% mutate(Source="Projected: GFDL"), size=1) + 
+  geom_line(data=d.proj2 %>% mutate(Source="Projected: IPSL"), size=1) + 
+  geom_line(data=d.proj3 %>% mutate(Source="Projected: MRI"), size=1) + 
+  #geom_smooth(data=d.smooth) +
   theme_bw() + theme(legend.position="bottom") + ggtitle("Observed and modeled start of growing season") +
   #scale_x_continuous(breaks=c(1982,1990,2000,2010)) +
   guides(fill=guide_legend(override.aes=list(alpha=1)), colour=guide_legend(override.aes=list(alpha=1))) +
-  facet_wrap(~Region, ncol=3, scales="free")
+  facet_wrap(~Region, ncol=3, scales="fixed")
 dev.off()
 
 
@@ -295,7 +344,7 @@ predict_hold_out_year <- function(gbm.out, d, regions, years){
 }
 
 d.preds <- predict_hold_out_year(gbm.out, d, unique(d$Region), yrs)
-save(ri.out, cv.out, d.out, s1, sMean, sMean2002, d.preds, file="gbm_preds_eval.RData")
+save(ri.out, cv.out, d.out, file="gbm_preds_eval_TEST.RData")
 
 err.out2 <- unnest(err.out)
 clrs <- c("black", "royalblue")
