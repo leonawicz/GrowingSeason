@@ -38,6 +38,55 @@ pd.mean <- summarise(pd, Mean_RI=round(mean(as.numeric(substr(Var, 17, nchar(Var
 pd <- left_join(pd, pd.mean)
 pd <- group_by(pd) %>% mutate(Var=paste0(Var2, Mean_RI)) %>% select(-Var2, -Mean_RI)
 
+pd_merge_data <- function(x, n=1000){
+  f <- function(x, rv, rx, n){
+    vp <- approx(x$Val, x$Prob, xout=seq(rv[1], rv[2], length=n))
+    xy <- approx(x$x, x$y, xout=seq(rx[1], rx[2], length=n))
+    data.frame(Run=x$Run[1], Val=vp$x, Prob=vp$y, x=xy$x, y=xy$y)
+  }
+  rv <- range(x$Val)
+  rx <- range(x$x)
+  x0 <- select_(x, .dots=list("-Val", "-Prob", "-x", "-y")) %>% distinct
+  x1 <- x %>% split(.$Run) %>% purrr::map(~f(.x, rv, rx, n)) %>% bind_rows
+  left_join(x0, x1)
+}  
+
+pd.interp <- pd %>% split(paste(.$Region, .$Var)) %>% purrr::map(~pd_merge_data(.x)) %>% bind_rows
+pd.ci <- pd.interp %>% group_by(Region, Var, Ymin, Val, x) %>% summarise(
+  n_na=length(which(is.na(y))),
+  Prob_mean=mean(Prob, na.rm=TRUE),
+  Prob_025=quantile(Prob, 0.025, na.rm=TRUE),
+  Prob_975=quantile(Prob, 0.975, na.rm=TRUE),
+  y_mean=mean(y, na.rm=TRUE),
+  y_025=ifelse(n_na > 0, NA, quantile(y, 0.025, na.rm=TRUE)),
+  y_975=ifelse(n_na > 0, NA, quantile(y, 0.975, na.rm=TRUE)))
+  
+pd.ci <- pd.interp %>% group_by(Region, Var, Ymin, Val, x) %>% summarise(
+  n_na=length(which(is.na(y))),
+  Prob_mean=mean(Prob, na.rm=TRUE),
+  Prob_min=min(Prob, na.rm=TRUE),
+  Prob_max=max(Prob, na.rm=TRUE),
+  y_mean=ifelse(n_na > 16, NA, mean(y, na.rm=TRUE)),
+  y_min=ifelse(n_na > 16, NA, quantile(y, 0.025, na.rm=TRUE)),
+  y_max=ifelse(n_na > 16, NA, quantile(y, 0.975, na.rm=TRUE)))
+
+# bands
+save_pdplot <- function(x, outDir){
+  region <- gsub(" ", "", unique(x$Region))
+  g <- ggplot(x, aes(x=Val)) + facet_wrap(~Var, ncol=2, scales="free") + labs(x="x", y="y")
+  g <- g + geom_ribbon(aes(ymin=Ymin, ymax=Prob_mean), fill="orange") +
+  geom_ribbon(aes(x=x, ymin=y_min, ymax=y_max), fill="black", alpha=0.2) +
+  #geom_line(aes(x=x, y=y_mean), size=1) +
+  geom_line(aes(x=x, y=y_min), size=1) +
+  geom_line(aes(x=x, y=y_max), size=1)
+  png(file.path(outDir, paste0("gbm_PD_", region, ".png")), width=2000, height=2000, res=200)
+  print(g)
+  dev.off()
+}
+
+pd.ci %>% split(.$Region) %>% purrr::walk(~save_pdplot(.x, outDir=plotDir))
+
+# spaghetti
 save_pdplot <- function(x, outDir){
   region <- gsub(" ", "", unique(x$Region))
   g <- ggplot(x, aes(x=Val)) + facet_wrap(~Var, ncol=2, scales="free") + labs(x="x", y="y")
