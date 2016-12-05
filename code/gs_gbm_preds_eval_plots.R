@@ -149,7 +149,7 @@ knitr::kable(d.proj.table2, format="latex", digits=0, caption='Start of season c
 
 
 z <- b.rcp60.qm %>% subset(5:94) %>% stackApply(rep(1:9, each=10), mean) %>% subset(c(2,9)) %>% calc(function(x) x[2]-x[1])
-rTheme <- function(region=colorRampPalette(c("darkred", "firebrick1", "white", "royalblue", "darkblue"))(19), ...){
+rTheme <- function(region=colorRampPalette(rev(c("darkred", "firebrick1", "white", "royalblue", "darkblue")))(99), ...){
   theme <- custom.theme.2(region=region, ...)
   theme$strip.background$col <- theme$strip.shingle$col <- theme$strip.border$col <- theme$panel.background$col <- theme$axis.line$col <- "transparent"
   theme
@@ -157,7 +157,7 @@ rTheme <- function(region=colorRampPalette(c("darkred", "firebrick1", "white", "
 
 rng <- range(z[], na.rm=T)
 rng <- range(rng, -rng)
-at.vals <- seq(rng[1], rng[2], length=19)
+at.vals <- seq(rng[1], rng[2], length=99)
 colkey <- list(at=at.vals, labels=list(labels=round(at.vals), at=at.vals))
 
 #png(file.path(plotDir, paste0(".png")), width=3200, height=1600, res=200)
