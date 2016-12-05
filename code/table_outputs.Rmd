@@ -1,0 +1,17 @@
+---
+classoption: landscape
+output: pdf_document
+output pdf_document: null
+---
+
+```{r knitr_setup, echo=FALSE}
+library(knitr)
+opts_chunk$set(cache=FALSE, eval=TRUE, echo=FALSE, tidy=TRUE, message=FALSE, warning=FALSE, dpi=300, fig.height=10.5, fig.width=10.5)
+read_chunk("output_tables.R")
+```
+
+```{r setup}
+```
+
+```{r tables}
+```
