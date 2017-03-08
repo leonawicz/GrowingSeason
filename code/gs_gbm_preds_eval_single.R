@@ -26,14 +26,15 @@ if(use_ak){
   shrink <- c(0.5, c(0.03808634, 0.01393819, 0.11464891, 0.11070950, 0.04268367, 0.01483978, 0.08393778, 0.20000000, 0.06569468)) # first one is a test for AK
   frac <- c(0.1, c(rep(0.1, 5), .5, .5, .1, .5)) # first one test
   regions <- sort(unique(d$Region))
-  predictors <- paste0("DOY_TDD", c(15, 15, 20, 10, "05", 10, 20, "05", "05", "05"))
+  predictors <- paste0("DOY_TDD", c(15, 15, 20, 10, "05", 10, "05", 20, "05", "05"))
 
 } else{
   n.trees <- 100#2400 #(0.5)*c(3000, 2500, 4500, 6500, 3000, 1500, 3000, 6000, 1500)
-  shrink <- rep(0.2, 9) #c(0.029872457, 0.014395137, 0.133199817, 0.119391448, 0.040367520, 0.005136854, 0.022135554, 0.200000000, 0.011665086)
+  shrink <- #rep(0.2, 9) #
+    c(0.029872457, 0.014395137, 0.133199817, 0.119391448, 0.040367520, 0.005136854, 0.022135554, 0.200000000, 0.011665086)
   frac <- c(rep(0.1, 5), .5, .5, .1, .5)
   regions <- sort(unique(d$Region))
-  predictors <- paste0("DOY_TDD", c(15, 20, 10, "05", 10, 20, "05", "05", "05"))
+  predictors <- paste0("DOY_TDD", c(15, 20, 10, "05", 10, "05", 20, "05", "05"))
 
 }
 
@@ -134,7 +135,7 @@ system.time( dlist <- mclapply(1:32, gbm_explore, d, n.trees=n.trees, shrinkage=
 # Extract tables of models, CV optimal trees, predictions, corrections, etc.
 gbm.out <- lapply(dlist, "[[", 1)
 ri.out <-  purrr::map2(gbm.out, seq_along(gbm.out), ~select(.x, Region, RI) %>% mutate(Run=.y) %>% unnest) %>% bind_rows %>% filter(Method=="CV")
-cv.out <-  purrr::map(gbm.out, ~select(.x, Region, CV)) %>% bind_rows
+cv.out <-  purrr::map(gbm.out, ~select(.x, Region, CV)) %>% bind_rows %>% unnest
 err.out <-  purrr::map2(gbm.out, seq_along(gbm.out), ~select(.x, Region, Error) %>% mutate(Run=.y)) %>% bind_rows %>% unnest
 pd.out <-  purrr::map2(gbm.out, seq_along(gbm.out), ~group_by(.x) %>% select(PD) %>% mutate(Run=.y)) %>% bind_rows %>% unnest
 d.out <- rbindlist(lapply(dlist, "[[", 2))
@@ -142,29 +143,43 @@ d.out <- rbindlist(lapply(dlist, "[[", 2))
 d.out <- group_by(d.out, Region, Year, Source) %>% summarise(SOS=mean(SOS)) %>% bind_rows(filter(d.out))
 
 #save(ri.out, cv.out, pd.out, d.out, file="final_outputs/final_gbm_summary_tables.RData")
-save(ri.out, cv.out, pd.out, d.out, file="final_outputs/final_gbm_summary_tables_withAK.RData")
+#save(ri.out, cv.out, pd.out, d.out, file="final_outputs/final_gbm_summary_tables_withAK.RData")
 dir.create("singlePred_outputs", showWarnings=FALSE)
-save(ri.out, cv.out, pd.out, d.out, file="singlePred_outputs/final_gbm_summary_tables_withAK.RData")
+save(ri.out, cv.out, pd.out, d.out, file="singlePred_outputs/final_gbm_summary_tables.RData")
 
 # use this one
 gbm_prediction_maps <- function(newdata, d, r, year.method="match", lm.pars=NULL, output="maps", simplify=TRUE, agg=FALSE, agg.frac=0.05, n.cores=32){
   yrs <- sort(unique(newdata$Year))
   if("Year" %in% names(d[[1]])) gbm.yrs <- sort(unique(d[[1]]$Year))
-  grp <- if("Year" %in% names(d[[1]])) list("Region", "Year") else list("Region")
+  grp <- if("Year" %in% names(d[[1]])) list("Region", "Year") else "Region"
+  d <- purrr::map(d, ~group_by_(.x, .dots=grp))
   newdata <- if("Year" %in% names(d[[1]])) arrange(newdata, Year, Region, Obs) else arrange(newdata, Region, Year, Obs)
-  if(agg) newdata <- group_by(newdata, Region, Year) %>% sample_frac(agg.frac) %>% summarise(Cell=Region[1], DOY_TDD05=mean(DOY_TDD05), DOY_TDD10=mean(DOY_TDD10), DOY_TDD15=mean(DOY_TDD15), DOY_TDD20=mean(DOY_TDD20)) %>% group_by(Region) # for point models
+  if(agg) newdata <- group_by(newdata, Region, Year) %>% sample_frac(agg.frac) %>%
+    summarise(Cell=Region[1],
+              DOY_TDD05=mean(DOY_TDD05),
+              DOY_TDD10=mean(DOY_TDD10),
+              DOY_TDD15=mean(DOY_TDD15),
+              DOY_TDD20=mean(DOY_TDD20)) %>% group_by(Region) # for point models
   if(year.method=="match"){
-    d <- mclapply(seq_along(d), function(i, x) x[[i]] %>% group_by_(.dots=grp) %>% do(Predicted=as.integer(round(get_preds(., model=GBM1, newdata=newdata, n.trees=BI, type.err="cv")))) %>% mutate(Run=i), x=d, mc.cores=n.cores)
+    d <- mclapply(seq_along(d), function(i, x) x[[i]] %>%
+                    do(Predicted=as.integer(round(
+                      get_preds(., model=.$GBM1, newdata=newdata, n.trees=.$BI, type.err="cv", grp=as.character(groups(d[[1]])))))) %>%
+                    mutate(Run=i), x=d, mc.cores=n.cores)
   } else if(year.method=="random"){
-    par_preds <- function(i, x) x[[i]] %>% group_by_(.dots=grp) %>% do(Predicted=as.integer(round(get_preds(., model=GBM1, newdata=newdata[[i]], n.trees=BI, type.err="cv")))) %>% mutate(Run=i)
-    newdata <- purrr::map(seq_along(d), ~mutate(newdata, YearBackup=Year) %>% group_by(YearBackup) %>% mutate(Year=sample(gbm.yrs, 1, replace=TRUE)) %>% group_by)
+    par_preds <- function(i, x) x[[i]] %>%
+      do(Predicted=as.integer(round(
+        get_preds(., model=.$GBM1, newdata=newdata[[i]], n.trees=.$BI, type.err="cv", grp=as.character(groups(d[[1]])))))) %>% mutate(Run=i)
+    newdata <- purrr::map(seq_along(d), ~mutate(newdata, YearBackup=Year) %>% group_by(YearBackup) %>%
+                            mutate(Year=sample(gbm.yrs, 1, replace=TRUE)) %>% group_by)
     d <- mclapply(seq_along(d), par_preds, x=d, mc.cores=n.cores)
     newdata <- mutate(newdata[[1]], Year=YearBackup) %>% select(-YearBackup)
   }
-  d <- d %>% purrr::map(~unnest(.x) %>% mutate(Cell=newdata$Cell, Year=as.integer(newdata$Year)) %>% nest(Cell, Predicted) %>% group_by(Region, Year, Run))
+  d <- d %>% purrr::map(~unnest(.x) %>% mutate(Cell=newdata$Cell, Year=as.integer(newdata$Year)) %>%
+                          nest(Cell, Predicted) %>% group_by(Region, Year, Run))
   if(!is.null(lm.pars)){
     d <- d %>% purrr::map2(lm.pars, ~suppressMessages(left_join(.x, .y, copy=T)))
-    d <- d %>% purrr::map(~unnest(.x) %>% mutate(`Bias corrected`=(Predicted-intercept)/slope) %>% nest(Cell, Predicted, `Bias corrected`) %>% group_by(Region, Year, Run))
+    d <- d %>% purrr::map(~unnest(.x) %>% mutate(`Bias corrected`=(Predicted-intercept)/slope) %>%
+                            nest(Cell, Predicted, `Bias corrected`) %>% group_by(Region, Year, Run))
   }
   if(output=="table" || agg) return(bind_rows(d)) # for point models
   gc()
@@ -197,14 +212,15 @@ set.seed(1)
 system.time({
   for(i in seq_along(rcps)){
     for(j in seq_along(models)){
-      d.gcm <- d.tdd %>% data.table %>% filter(RCP %in% c("Historical", rcps[i]) & Model==models[j]) %>% select(-RCP, -Model, -x, -y, -Elev, -SOS)
+      d.gcm <- d.tdd %>% data.table %>% filter(RCP %in% c("Historical", rcps[i]) & Model==models[j]) %>%
+        select(-RCP, -Model, -x, -y, -Elev, -SOS) %>% tbl_df
       pred.maps[[i]][[j]] <- gbm_prediction_maps(d.gcm, gbm.out[1:10], r, agg=FALSE, n.cores=10)
       print(j)
     }
   }
 })
-#saveRDS(pred.maps, file="final_outputs/gbm_pred_rasters.rds")
-saveRDS(pred.maps, file="final_outputs/gbm_pred_rasters_withAK.rds")
+saveRDS(pred.maps, file="singlePred_outputs/gbm_pred_rasters.rds")
+#saveRDS(pred.maps, file="singlePred_outputs/gbm_pred_rasters_withAK.rds")
 
 setwd("/atlas_scratch/mfleonawicz/projects/GrowingSeason/workspaces")
 library(raster)
@@ -218,14 +234,18 @@ shpDir <- "/atlas_scratch/mfleonawicz/projects/DataExtraction/data/shapefiles"
 eco_shp <- shapefile(file.path(shpDir, "AK_ecoregions/akecoregions.shp")) %>% spTransform(CRS(projection(sos)))
 eco_shp <- unionSpatialPolygons(eco_shp, eco_shp@data$LEVEL_2)
 
-#pred.maps <- readRDS("final_outputs/gbm_pred_rasters.rds")
-pred.maps <- readRDS("final_outputs/gbm_pred_rasters_withAK.rds")
+#pred.maps <- readRDS("singlePred_outputs/gbm_pred_rasters.rds")
+#pred.maps <- readRDS("singlePred_outputs/gbm_pred_rasters_withAK.rds")
 rcps <- c("RCP 6.0", "RCP 8.5")
 gcms <- c("GFDL-CM3", "IPSL-CM5A-LR", "MRI-CGCM3")
 
 extract_to_dt <- function(x, y, fun, rcp, gcm, run, ...){
-  raster::extract(x, y, fun, ...) %>% t %>% data.table %>% setnames(names(y)) %>% mutate(Run=run) %>% melt(id.vars="Run", variable.name="Region", value.name="SOS") %>%
-    mutate(Year=as.integer(substr(names(x), 2, 5)), RCP=factor(rcp, levels=c("RCP 6.0", "RCP 8.5")), Model=gcm, Source="Projected") %>% select(RCP, Model, Region, Year, Source, SOS, Run)
+  raster::extract(x, y, fun, ...) %>% t %>% data.table %>% setnames(names(y)) %>% mutate(Run=run) %>%
+    melt(id.vars="Run", variable.name="Region", value.name="SOS") %>%
+    mutate(Year=rep(as.integer(substr(names(x), 2, 5)), length(names(y))),
+           RCP=factor(rcp, levels=c("RCP 6.0", "RCP 8.5")),
+           Model=gcm, Source="Projected") %>%
+    select(RCP, Model, Region, Year, Source, SOS, Run)
 }
 
 d.proj <- vector("list", length(rcps)*length(gcms)*length(pred.maps[[1]][[1]]))
@@ -240,9 +260,9 @@ for(i in seq_along(rcps)){
   }
 }
 d.proj <- bind_rows(d.proj)
-#saveRDS(d.proj, "final_outputs/sos_projections.rds")
-saveRDS(d.proj, "final_outputs/sos_projections_withAK.rds")
-
+saveRDS(d.proj, "singlePred_outputs/sos_projections.rds")
+#saveRDS(d.proj, "singlePred_outputs/sos_projections_withAK.rds")
+######################################################################################## END
 set.seed(1)
 n <- 10
 outfiles <- paste0("run", 1:n, ".rds")
