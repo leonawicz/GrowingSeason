@@ -52,9 +52,9 @@ get_ri <- function(data, model, n.trees, outDir, prefix="", suffix="", saveplot=
 }
 
 # Time series
-get_preds <- function(data, model, newdata, n.trees, type.err="test"){
+get_preds <- function(data, model, newdata, n.trees, type.err="test", grp=NULL){
     m <- model[[1]]
-    grp <- as.character(groups(data))
+    if(is.null(grp)) grp <- as.character(groups(data))
     for(i in 1:length(grp)) newdata <- filter_(newdata, .dots=list(paste0(grp[i], "==\'", data[[grp[i]]][1], "\'")))
     if(!is.numeric(n.trees)){
         n.trees <- if(type.err=="test") n.trees[[1]]$Test else if(type.err=="cv") n.trees[[1]]$CV else stop("type.err must be 'test' or 'cv'.")
@@ -98,19 +98,22 @@ make_TDD_dt <- function(d, extractBy, y, keep.y=FALSE, years=NULL, dem, ...){
 }
 
 # Partial dependence
-get_pd <- function(data=NULL, source_data, x, y=NULL, model, outDir, vars=NULL, n.vars=length(vars), order.by.ri=TRUE, density.adjust=2, spline.df=12, prefix="", suffix="", saveplot=TRUE, ...){
+get_pd <- function(data=NULL, source_data, x, y=NULL, model, outDir, vars=NULL, n.vars=length(vars), order.by.ri=TRUE,
+                   density.adjust=2, spline.df=12, prefix="", suffix="", saveplot=TRUE, grp=NULL, ...){
     if(is.null(data) & class(model)!="gbm") stop("Must pass a gbm object to 'model' if not using a gbm data table for 'data'.")
     if(!is.null(data)){
         model <- model[[1]]
         max.vars <- length(unique(data$RI[[1]]$Predictor))
-        grp <- as.character(groups(data))
+        print(paste("n.vars:", n.vars))
+        print(paste("max.vars:", data$RI[[1]]$Predictor))
+        if(is.null(grp)) grp <- as.character(groups(data))
         for(i in 1:length(grp)) source_data <- filter_(source_data, .dots=list(paste0(grp[i], "==\'", data[[grp]][1], "\'")))
     }
     data <- source_data
     stopifnot(length(n.vars) > 0)
-    x <- substitute(x)
+    #x <- substitute(x)
     if(is.character(x)) x <- as.name(x)
-    y <- substitute(y)
+    #y <- substitute(y)
     if(is.character(y)) y <- as.name(y)
     if(is.null(vars)) vars <- 1:n.vars
     if(is.null(n.vars)) n.vars <- length(vars)
@@ -127,7 +130,7 @@ get_pd <- function(data=NULL, source_data, x, y=NULL, model, outDir, vars=NULL, 
     color.var <- if(is.null(dots$colour)) NULL else dots$colour
     xlb <- if(is.null(dots$xlab)) as.character(x) else dots$xlab
     ylb <- if(!is.null(dots$ylab)) dots$ylab else if(is.null(y)) "y" else as.character(y)
-    
+
     # internal support functions
     dtDen <- function(x, n=1000, adj=0.1, out="vector", min.zero=TRUE, diversify=FALSE){
         b <- max(1, 0.05*diff(range(x)))
@@ -149,23 +152,33 @@ get_pd <- function(data=NULL, source_data, x, y=NULL, model, outDir, vars=NULL, 
         x <- (x - min(x))/diff(range(x))
         if(is.null(y)) x else x * diff(range(y)) + min(y)
     }
-    
+
     # process
-    d.pd <- rbindlist(lapply(1:max.vars, get_pd_dt, model=model, order=order.by.ri)) %>% group_by(Var, RI) %>%
-        summarise(x=smooth.spline(x, y, df=spline.df)$x, y=smooth.spline(x, y, df=spline.df)$y) %>% group_by(RI, add=T) %>%
-        summarise(x=approx(x, y, n=1000)$x, y=approx(x, y, n=1000)$y) %>% arrange(Var)
+    d.pd <- rbindlist(lapply(1:max.vars, get_pd_dt, model=model, order=order.by.ri)) %>% group_by(Var, RI)
+    spx <- function(a, b, d) smooth.spline(x=a, y=b, df=d)$x
+    spy <- function(a, b, d) smooth.spline(x=a, y=b, df=d)$y
+    d.pd <- d.pd %>%
+      mutate_(
+        x2=lazyeval::interp(~spx(x, y, spline.df), x=as.name("x"), y=as.name("y")),
+        y2=lazyeval::interp(~spy(x, y, spline.df), x=as.name("x"), y=as.name("y"))) %>% group_by(RI, add=T) %>%
+      do(x=approx(.$x2, .$y2, n=1000)$x, y=approx(.$x2, .$y2, n=1000)$y) %>% unnest %>% arrange(Var)
     lev <- levels(d.pd$Var)
     if(order.by.ri){
         lev <- paste0(unique(d.pd$Var), ": RI = ", round(unique(d.pd$RI), 2))
         d.pd <- mutate(d.pd, Var=factor(paste0(Var, ": RI = ", round(RI, 2)), levels=lev))
     }
-    data <- summarise_(data, Val=lazyeval::interp(~dtDen(var, adj=density.adjust, out="list")$x, var=x), Prob=lazyeval::interp(~dtDen(var, adj=density.adjust, out="list")$y, var=x)) %>%
-    mutate(Var=factor(lev[pmatch(Var, lev, duplicates.ok=TRUE)], levels=lev)) %>% arrange(Var) %>% cbind(select(d.pd, x, y)) %>% group_by(Region, Var) %>%
-    mutate(Prob=map_range(Prob, y)) %>% group_by(Var, add=T)
+
+    #data <- unnest(select(ungroup(data), -Region)) %>% group_by(Region, Var) %>%
+    data <- group_by(data, Region, Var) %>%
+      do(Val=dtDen(.$Val, adj=density.adjust, out="list")$x, Prob=dtDen(.$Val, adj=density.adjust, out="list")$y) %>% unnest %>%
+      mutate(Var=factor(lev[pmatch(Var, lev, duplicates.ok=TRUE)], levels=lev)) %>% arrange(Var) %>%
+      cbind(select(d.pd, x, y)) %>% group_by(Region, Var) %>% mutate(Prob=map_range(Prob, y)) %>% group_by(Var, add=T)
     if(saveplot){
-    g <- ggplot(data %>% filter(Var %in% levels(Var)[1:n.vars]) %>% mutate(Ymin=min(Prob)), aes(x=Val)) + facet_wrap(as.formula(facet.formula), ncol=cols, scales=scales) + labs(x=xlb, y=ylb)
+    g <- ggplot(data %>% filter(Var %in% levels(Var)[1:n.vars]) %>% mutate(Ymin=min(Prob)), aes(x=Val)) +
+      facet_wrap(as.formula(facet.formula), ncol=cols, scales=scales) + labs(x=xlb, y=ylb)
     if(is.null(color.var)) g <- g + geom_ribbon(aes(ymin=Ymin, ymax=Prob), fill="orange") + geom_line(aes(x=x, y=y), size=1)
-    if(!is.null(color.var)) g <- g + geom_ribbon(aes_string(ymin="Ymin", ymax="Prob", colour=color.var, fill=color.var), alpha=0.5) + geom_line(aes_string(x="x", y="y", colour=color.var), size=1)
+    if(!is.null(color.var)) g <- g + geom_ribbon(aes_string(ymin="Ymin", ymax="Prob", colour=color.var, fill=color.var), alpha=0.5) +
+        geom_line(aes_string(x="x", y="y", colour=color.var), size=1)
     png(file.path(outDir, paste0(prefix, "gbm_PD", suffix, ".png")), width=w, height=h, res=r)
     print(g)
     dev.off()
@@ -190,25 +203,25 @@ get_pd_OLD <- function(data, model, outDir, prefix="", suffix="", saveplot=TRUE,
     return()
 }
 
-plot.pd.gbm <- 
-function (object, saData, nVar = 4, res = 1500, rescale = F) 
+plot.pd.gbm <-
+function (object, saData, nVar = 4, res = 1500, rescale = F)
 {
     require(gbm)
     rel.inf <- summary(object, plotit = F)[1:nVar, ]
     var <- as.character(rel.inf[, 1])
-    plotData <- plot(object, var[1], continuous.resolution = res, 
+    plotData <- plot(object, var[1], continuous.resolution = res,
         return.grid = T)
     names(plotData)[1] <- "x"
     if (rescale == T) {
-        plotData$x <- rms(saData[which(names(saData) == as.character(rel.inf$var[1]))]) * 
+        plotData$x <- rms(saData[which(names(saData) == as.character(rel.inf$var[1]))]) *
             plotData$x
     }
     for (i in 2:nVar) {
-        tmp <- plot(object, var[i], continuous.resolution = res, 
+        tmp <- plot(object, var[i], continuous.resolution = res,
             return.grid = T)
         names(tmp)[1] <- "x"
         if (rescale == T) {
-            tmp$x <- rms(saData[which(names(saData) == as.character(rel.inf$var[i]))]) * 
+            tmp$x <- rms(saData[which(names(saData) == as.character(rel.inf$var[i]))]) *
                 tmp$x
             print(rms(saData[which(names(saData) == as.character(rel.inf$var[i]))]))
             print(summary(saData[which(names(saData) == as.character(rel.inf$var[i]))]))
@@ -217,7 +230,7 @@ function (object, saData, nVar = 4, res = 1500, rescale = F)
     }
     plotData$var <- var
     plotData$SI <- rep(rel.inf[, 2], each = res)
-    label <- paste(rel.inf[, 1], "\n SI = ", signif(rel.inf[, 
+    label <- paste(rel.inf[, 1], "\n SI = ", signif(rel.inf[,
         2], 3), sep = "")
     label <- factor(rep(label, each = res), levels = label, ordered = T)
     plotData$label <- label
@@ -225,37 +238,37 @@ function (object, saData, nVar = 4, res = 1500, rescale = F)
 }
 
 sa.pd.plot <-
-function (plotModel, saData, nVars = 4, den.adj=2, spl.df=12, rescale = F, logem = F) 
+function (plotModel, saData, nVars = 4, den.adj=2, spl.df=12, rescale = F, logem = F)
 {
     if (logem == T) {
         plotModel$sa$y <- exp(plotModel$sa$y)
     }
     plotModel$sa$y[plotModel$sa$y < 0] <- 0
-    saPlot <- xyplot(y ~ x | label, data = plotModel$sa, subset = SI >= 
-        rev(sort(unique(SI)))[nVars], groups = var, las = 1, 
+    saPlot <- xyplot(y ~ x | label, data = plotModel$sa, subset = SI >=
+        rev(sort(unique(SI)))[nVars], groups = var, las = 1,
         panel = function(x, y, groups, subscripts, ...) {
             p.num <- panel.number()
             xData <- as.data.frame(matrix(plotModel$data$x, nrow = length(plotModel$data$y)))
             names(xData) <- plotModel$var.names
             xData <- xData[, groups[p.num]]
             if (rescale == T) {
-                xData <- rms(saData[which(names(saData) == groups[p.num])]) * 
+                xData <- rms(saData[which(names(saData) == groups[p.num])]) *
                   xData
             }
-            dens <- density(xData, from = min(xData), to = max(xData), 
+            dens <- density(xData, from = min(xData), to = max(xData),
                 adjust = den.adj)#length(xData)/25)
-            dens$y <- (dens$y - min(dens$y))/diff(range(dens$y)) * 
+            dens$y <- (dens$y - min(dens$y))/diff(range(dens$y)) *
                 diff(range(y)) + min(y)
             dens$y[dens$y <= 0] <- 0.01 * max(dens$y)
             panel.grid(v = -1, h = 0, lty = 1)
-            panel.xyplot(dens$x, dens$y, type = "h", col = "palegreen", 
+            panel.xyplot(dens$x, dens$y, type = "h", col = "palegreen",
                 lw = 5, ...)
-            panel.xyplot(x, smooth.spline(x, y, df = spl.df)$y, type = "l", 
+            panel.xyplot(x, smooth.spline(x, y, df = spl.df)$y, type = "l",
                 col = "darkblue", lw = 3, ...)
-        }, par.strip.text = list(lines = 2, cex = 0.75), xlab = "", 
-        ylab = "partial dependence", between = list(x = 1, y = 1), 
-        scale = list(x = list(relation = "free", cex = 0.8), 
-            y = list(relation = "free", rot = 0)), layout = c(2, 
+        }, par.strip.text = list(lines = 2, cex = 0.75), xlab = "",
+        ylab = "partial dependence", between = list(x = 1, y = 1),
+        scale = list(x = list(relation = "free", cex = 0.8),
+            y = list(relation = "free", rot = 0)), layout = c(2,
             nVars/2), as.table = T)
     return(saPlot)
 }
