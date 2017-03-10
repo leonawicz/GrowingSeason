@@ -27,6 +27,7 @@ if(use_ak){
   frac <- c(0.1, c(rep(0.1, 5), .5, .5, .1, .5)) # first one test
   regions <- sort(unique(d$Region))
   predictors <- paste0("DOY_TDD", c(15, 15, 20, 10, "05", 10, "05", 20, "05", "05"))
+  file_suffix <- "_withAK"
 
 } else{
   n.trees <- 100#2400 #(0.5)*c(3000, 2500, 4500, 6500, 3000, 1500, 3000, 6000, 1500)
@@ -35,6 +36,7 @@ if(use_ak){
   frac <- c(rep(0.1, 5), .5, .5, .1, .5)
   regions <- sort(unique(d$Region))
   predictors <- paste0("DOY_TDD", c(15, 20, 10, "05", 10, "05", 20, "05", "05"))
+  file_suffix <- ""
 
 }
 
@@ -142,10 +144,8 @@ d.out <- rbindlist(lapply(dlist, "[[", 2))
 #lm.out <- lapply(dlist, "[[", 3)
 d.out <- group_by(d.out, Region, Year, Source) %>% summarise(SOS=mean(SOS)) %>% bind_rows(filter(d.out))
 
-#save(ri.out, cv.out, pd.out, d.out, file="final_outputs/final_gbm_summary_tables.RData")
-#save(ri.out, cv.out, pd.out, d.out, file="final_outputs/final_gbm_summary_tables_withAK.RData")
 dir.create("singlePred_outputs", showWarnings=FALSE)
-save(ri.out, cv.out, pd.out, d.out, file="singlePred_outputs/final_gbm_summary_tables.RData")
+save(ri.out, cv.out, pd.out, d.out, file=paste0("singlePred_outputs/final_gbm_summary_tables", file_suffix, ".RData"))
 
 # use this one
 gbm_prediction_maps <- function(newdata, d, r, year.method="match", lm.pars=NULL, output="maps", simplify=TRUE, agg=FALSE, agg.frac=0.05, n.cores=32){
@@ -219,8 +219,7 @@ system.time({
     }
   }
 })
-saveRDS(pred.maps, file="singlePred_outputs/gbm_pred_rasters.rds")
-#saveRDS(pred.maps, file="singlePred_outputs/gbm_pred_rasters_withAK.rds")
+saveRDS(pred.maps, file=paste0("singlePred_outputs/gbm_pred_rasters", file_suffix, ".rds"))
 
 setwd("/atlas_scratch/mfleonawicz/projects/GrowingSeason/workspaces")
 library(raster)
@@ -234,8 +233,7 @@ shpDir <- "/atlas_scratch/mfleonawicz/projects/DataExtraction/data/shapefiles"
 eco_shp <- shapefile(file.path(shpDir, "AK_ecoregions/akecoregions.shp")) %>% spTransform(CRS(projection(sos)))
 eco_shp <- unionSpatialPolygons(eco_shp, eco_shp@data$LEVEL_2)
 
-#pred.maps <- readRDS("singlePred_outputs/gbm_pred_rasters.rds")
-#pred.maps <- readRDS("singlePred_outputs/gbm_pred_rasters_withAK.rds")
+#pred.maps <- readRDS(paste0("singlePred_outputs/gbm_pred_rasters", file_suffix, ".rds"))
 rcps <- c("RCP 6.0", "RCP 8.5")
 gcms <- c("GFDL-CM3", "IPSL-CM5A-LR", "MRI-CGCM3")
 
@@ -260,8 +258,7 @@ for(i in seq_along(rcps)){
   }
 }
 d.proj <- bind_rows(d.proj)
-saveRDS(d.proj, "singlePred_outputs/sos_projections.rds")
-#saveRDS(d.proj, "singlePred_outputs/sos_projections_withAK.rds")
+saveRDS(d.proj, paste0("singlePred_outputs/sos_projections", file_suffix, ".rds"))
 ######################################################################################## END
 set.seed(1)
 n <- 10
