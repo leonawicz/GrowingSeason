@@ -80,7 +80,7 @@ gbm_explore <- function(i, data, n.trees, shrinkage, frac, years=sort(unique(dat
     d.gbm <- d.gbm %>%
       purrr::map2(seq_along(form), ~gbm(as.formula(form[.y]), data=.x,
         distribution="gaussian", bag.fraction=0.5, cv.folds=5, train.fraction=1,
-        interaction.depth=1, n.minobsinnode=5, n.trees=n.trees[.y], shrinkage=shrinkage[.y], verbose=FALSE, keep.data=FALSE, n.cores=1))
+        interaction.depth=1, n.minobsinnode=5, n.trees=n.trees[.y], shrinkage=shrinkage[.y], verbose=FALSE, keep.data=TRUE, n.cores=1))
 
     d.gbm <- d.train %>% group_by %>% select(Region) %>% distinct(Region) %>% mutate(GBM1=d.gbm) %>% group_by(Region)
     regions <- d.gbm$Region
