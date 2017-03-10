@@ -8,7 +8,7 @@ source("../code/gs_functions.R")
 sos <- readAll(brick("../data/sos_1982_2010.tif"))
 r <- calc(sos, mean)
 
-d <- dcast(d, Region + Year + Obs + x + y + SOS ~ Threshold, value.var="TDD")
+d <- dcast(d, Region + Year + Obs + x + y + SOS ~ Threshold, value.var="TDD") %>% tbl_df
 d <- mutate(d, Cell=cellFromXY(sos, cbind(x,y))) %>% select(-x, -y)
 setnames(d, c("Region", "Year", "Obs", "SOS", paste0("DOY_TDD", c("05", 10, 15, 20)), "Cell"))
 
@@ -16,7 +16,7 @@ cells <- (d %>% group_by(Cell) %>% summarise(Region=unique(Region), n=n()) %>% f
 d <- filter(d, Cell %in% cells)
 
 set.seed(564)
-use_ak <- TRUE
+use_ak <- FALSE
 
 if(use_ak){
   d_ak <- copy(d)
@@ -80,7 +80,7 @@ gbm_explore <- function(i, data, n.trees, shrinkage, frac, years=sort(unique(dat
     d.gbm <- d.gbm %>%
       purrr::map2(seq_along(form), ~gbm(as.formula(form[.y]), data=.x,
         distribution="gaussian", bag.fraction=0.5, cv.folds=5, train.fraction=1,
-        interaction.depth=1, n.minobsinnode=5, n.trees=n.trees, shrinkage=shrinkage[.y], verbose=FALSE, keep.data=FALSE, n.cores=1))
+        interaction.depth=1, n.minobsinnode=5, n.trees=n.trees[.y], shrinkage=shrinkage[.y], verbose=FALSE, keep.data=FALSE, n.cores=1))
 
     d.gbm <- d.train %>% group_by %>% select(Region) %>% distinct(Region) %>% mutate(GBM1=d.gbm) %>% group_by(Region)
     regions <- d.gbm$Region
@@ -136,6 +136,7 @@ gbm_explore <- function(i, data, n.trees, shrinkage, frac, years=sort(unique(dat
 # Run
 system.time( dlist <- mclapply(1:32, gbm_explore, d, n.trees=n.trees, shrinkage=shrink, frac=frac,
                                by.year=FALSE, agg=FALSE, predictors=predictors, mc.cores=32) )
+gbm_explore(1, d, n.trees=n.trees, shrinkage=shrink, frac=frac, by.year=FALSE, agg=FALSE, predictors=predictors)
 
 # Extract tables of models, CV optimal trees, predictions, corrections, etc.
 gbm.out <- lapply(dlist, "[[", 1)
