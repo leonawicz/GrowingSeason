@@ -104,8 +104,6 @@ get_pd <- function(data=NULL, source_data, x, y=NULL, model, outDir, vars=NULL, 
     if(!is.null(data)){
         model <- model[[1]]
         max.vars <- length(unique(data$RI[[1]]$Predictor))
-        print(paste("n.vars:", n.vars))
-        print(paste("max.vars:", data$RI[[1]]$Predictor))
         if(is.null(grp)) grp <- as.character(groups(data))
         for(i in 1:length(grp)) source_data <- filter_(source_data, .dots=list(paste0(grp[i], "==\'", data[[grp]][1], "\'")))
     }

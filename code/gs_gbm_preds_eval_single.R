@@ -16,13 +16,15 @@ cells <- (d %>% group_by(Cell) %>% summarise(Region=unique(Region), n=n()) %>% f
 d <- filter(d, Cell %in% cells)
 
 set.seed(564)
-use_ak <- FALSE
+use_ak <- TRUE
 
 if(use_ak){
   d_ak <- copy(d)
   d_ak$Region <- "Alaska"
   d <- bind_rows(d, d_ak)
-  n.trees <- 100#2400 #(0.5)*c(3000, 2500, 4500, 6500, 3000, 1500, 3000, 6000, 1500)
+  n.trees <- #100
+    #2400
+    (0.5)*c(3000, 2500, 4500, 6500, 3000, 1500, 3000, 6000, 1500)
   shrink <- c(0.5, c(0.03808634, 0.01393819, 0.11464891, 0.11070950, 0.04268367, 0.01483978, 0.08393778, 0.20000000, 0.06569468)) # first one is a test for AK
   frac <- c(0.1, c(rep(0.1, 5), .5, .5, .1, .5)) # first one test
   regions <- sort(unique(d$Region))
@@ -30,14 +32,15 @@ if(use_ak){
   file_suffix <- "_withAK"
 
 } else{
-  n.trees <- 100#2400 #(0.5)*c(3000, 2500, 4500, 6500, 3000, 1500, 3000, 6000, 1500)
+  n.trees <- #100
+    #2400
+    (0.5)*c(3000, 2500, 4500, 6500, 3000, 1500, 3000, 6000, 1500)
   shrink <- #rep(0.2, 9) #
     c(0.029872457, 0.014395137, 0.133199817, 0.119391448, 0.040367520, 0.005136854, 0.022135554, 0.200000000, 0.011665086)
   frac <- c(rep(0.1, 5), .5, .5, .1, .5)
   regions <- sort(unique(d$Region))
   predictors <- paste0("DOY_TDD", c(15, 20, 10, "05", 10, "05", 20, "05", "05"))
   file_suffix <- ""
-
 }
 
 # build gbm models
