@@ -136,7 +136,6 @@ gbm_explore <- function(i, data, n.trees, shrinkage, frac, years=sort(unique(dat
 # Run
 system.time( dlist <- mclapply(1:32, gbm_explore, d, n.trees=n.trees, shrinkage=shrink, frac=frac,
                                by.year=FALSE, agg=FALSE, predictors=predictors, mc.cores=32) )
-gbm_explore(1, d, n.trees=n.trees, shrinkage=shrink, frac=frac, by.year=FALSE, agg=FALSE, predictors=predictors)
 
 # Extract tables of models, CV optimal trees, predictions, corrections, etc.
 gbm.out <- lapply(dlist, "[[", 1)
