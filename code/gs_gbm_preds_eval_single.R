@@ -77,13 +77,20 @@ gbm_explore <- function(i, data, n.trees, shrinkage, frac, years=sort(unique(dat
     d.test <- setdiff(d, d.train)
     form <- paste("SOS ~", predictors)
     d.gbm <- d.train %>% split(.$Region)
-    d.gbm <- d.gbm %>%
-      purrr::map2(seq_along(form), ~gbm(as.formula(form[.y]), data=.x,
-        distribution="gaussian", bag.fraction=0.5, cv.folds=5, train.fraction=1,
-        interaction.depth=1, n.minobsinnode=5, n.trees=n.trees[.y], shrinkage=shrinkage[.y], verbose=FALSE, keep.data=TRUE, n.cores=1))
-
+    regions <- names(d.gbm)
+    if("Alaska" %in% regions){
+      d.gbm <- d.gbm[1] %>%
+        purrr::map2(1, ~gbm(as.formula(form[.y]), data=.x,
+          distribution="gaussian", bag.fraction=0.5, cv.folds=5, train.fraction=1,
+          interaction.depth=1, n.minobsinnode=5, n.trees=n.trees[.y], shrinkage=shrinkage[.y], verbose=FALSE, keep.data=TRUE, n.cores=1))
+      d.gbm <- rep(d.gbm, length(regions))
+    } else {
+      d.gbm <- d.gbm %>%
+        purrr::map2(seq_along(form), ~gbm(as.formula(form[.y]), data=.x,
+          distribution="gaussian", bag.fraction=0.5, cv.folds=5, train.fraction=1,
+          interaction.depth=1, n.minobsinnode=5, n.trees=n.trees[.y], shrinkage=shrinkage[.y], verbose=FALSE, keep.data=TRUE, n.cores=1))
+    }
     d.gbm <- d.train %>% group_by %>% select(Region) %>% distinct(Region) %>% mutate(GBM1=d.gbm) %>% group_by(Region)
-    regions <- d.gbm$Region
     #print(paste("regions[1]=='Alaska':", regions[1]=="Alaska"))
     if(regions[1]=="Alaska"){
       regions <- regions[-1]
@@ -136,6 +143,7 @@ gbm_explore <- function(i, data, n.trees, shrinkage, frac, years=sort(unique(dat
 # Run
 system.time( dlist <- mclapply(1:32, gbm_explore, d, n.trees=n.trees, shrinkage=shrink, frac=frac,
                                by.year=FALSE, agg=FALSE, predictors=predictors, mc.cores=32) )
+gbm_explore(1, d, n.trees=n.trees, shrinkage=shrink, frac=frac, by.year=FALSE, agg=FALSE, predictors=predictors)
 
 # Extract tables of models, CV optimal trees, predictions, corrections, etc.
 gbm.out <- lapply(dlist, "[[", 1)
