@@ -3,13 +3,20 @@ setwd("C:/github/GrowingSeason/workspaces")
 pkgs <- list("rasterVis", "maptools", "ggplot2", "data.table", "dplyr", "tidyr")
 dummy <- capture.output(lapply(pkgs, function(x) library(x, character.only=T)))
 
+use_ak <- TRUE
+set <- "singlePred"
+
+output_set <- if(set=="singlePred") "singlePred_outputs" else "final_outputs"
+suffix <- if(use_ak) "_withAK" else ""
+
 load("data.RData") # d, d.stats, d.stats2, d.hm, sos, ecomask, yrs, cbpal
-load("final_outputs/final_gbm_summary_tables_withAK.RData") # ri.out, cv.out, pd.out, d.out, s1, sMean, sMean2002
-dir.create(plotDir <- file.path("../plots/final_outputs_withAK"), recursive=T, showWarnings=F)
+load(paste0(output_set, "/final_gbm_summary_tables", suffix, ".RData"))
+d.proj <- readRDS(paste0("C:/github/GrowingSeason/workspaces/", output_set, "/sos_projections", suffix, ".rds"))
+dir.create(plotDir <- paste0("../plots/", output_set, suffix), recursive=T, showWarnings=F)
 
 # @knitr tables
 library(printr)
-lab <- c("Ecoregion", "DOY TDD 5%", "DOY TDD 10%", "DOY TDD 15%", "DOY TDD 20%")
+lab <- c("Ecoregion", levels(ri.out$Predictor))
 ri.table <- ri.out %>% group_by(Region, Predictor) %>% summarise(Mean=mean(RI), SD=sd(RI)) %>%
   mutate(`Relative Influence`=paste0(round(Mean, 1), " (",round(SD, 1), ")")) %>%
   dcast(Region ~ Predictor, value.var="Relative Influence") %>% setnames(lab)
@@ -20,8 +27,6 @@ rsq.table <- filter(d.out, is.na(Run) & Source!="Bias corrected" & Region!="Alas
 
 gbm.table <- left_join(ri.table, rsq.table)
 knitr::kable(gbm.table, format="latex", digits=2, caption='GBM relative influence and R2 by ecoregion')
-
-d.proj <- readRDS("C:/github/GrowingSeason/workspaces/final_outputs/sos_projections_withAK.rds")
 
 d.proj.table1a <- d.proj %>% filter(Year >= 1960) %>% mutate(Decade=Year - Year %% 10) %>% group_by(Region, RCP, Model, Decade) %>%
   summarise(SOS_mean=round(mean(SOS)), SOS_sd=round(sd(SOS), 1))
