@@ -44,7 +44,7 @@ proj.files <- list(
 	c("index.html", "gs_eda1.html", "gs_eda2.html", "gs_eda3.html"),
 	c(""),
 	c(""),
-	c("http://leonawicz.github.io")
+	c("https://leonawicz.github.io")
 )
 
 # generate navigation bar html file common to all pages
