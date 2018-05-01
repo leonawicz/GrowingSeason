@@ -16,7 +16,7 @@ cells <- (d %>% group_by(Cell) %>% summarise(Region=unique(Region), n=n()) %>% f
 d <- filter(d, Cell %in% cells)
 
 set.seed(564)
-use_ak <- FALSE
+use_ak <- TRUE
 
 if(use_ak){
   d_ak <- copy(d)
@@ -28,7 +28,8 @@ if(use_ak){
   shrink <- c(0.5, c(0.03808634, 0.01393819, 0.11464891, 0.11070950, 0.04268367, 0.01483978, 0.08393778, 0.20000000, 0.06569468)) # first one is a test for AK
   frac <- c(0.1, c(rep(0.1, 5), .5, .5, .1, .5)) # first one test
   regions <- sort(unique(d$Region))
-  predictors <- paste0("DOY_TDD", c(15, 15, 20, 10, "05", 10, "05", 20, "05", "05"))
+  predictors <- paste0("DOY_TDD", rep(10, 10)) #
+    #paste0("DOY_TDD", c(15, 15, 20, 10, "05", 10, "05", 20, "05", "05"))
   file_suffix <- "_withAK"
 
 } else{
@@ -68,10 +69,10 @@ gbm_explore <- function(i, data, n.trees, shrinkage, frac, years=sort(unique(dat
     #d <- group_by(d, Region, Year) %>% sample_frac(frac) %>% group_by(Region)
     d <- d %>% split(.$Region) %>% purrr::map2(frac, ~group_by(.x, Year) %>% sample_frac(.y)) %>% bind_rows %>% data.table %>% group_by(Region)
     if(agg && !by.year) d <- group_by(d, Region, Year) %>% summarise(SOS=mean(SOS),
-                                                                     DOY_TDD05=mean(DOY_TDD05),
-                                                                     DOY_TDD10=mean(DOY_TDD10),
-                                                                     DOY_TDD15=mean(DOY_TDD15),
-                                                                     DOY_TDD20=mean(DOY_TDD20)
+                                                                     #DOY_TDD05=mean(DOY_TDD05),
+                                                                     DOY_TDD10=mean(DOY_TDD10)#,
+                                                                     #DOY_TDD15=mean(DOY_TDD15),
+                                                                     #DOY_TDD20=mean(DOY_TDD20)
     ) %>% group_by(Region)
     d.train <- sample_frac(d, 0.5)
     d.test <- setdiff(d, d.train)
@@ -93,11 +94,11 @@ gbm_explore <- function(i, data, n.trees, shrinkage, frac, years=sort(unique(dat
     d.gbm <- d.train %>% group_by %>% select(Region) %>% distinct(Region) %>% mutate(GBM1=d.gbm) %>% group_by(Region)
     #print(paste("regions[1]=='Alaska':", regions[1]=="Alaska"))
     if(regions[1]=="Alaska"){
-      regions <- regions[-1]
+      #regions <- regions[-1]
       #print(regions)
-      d.gbm <- d.gbm %>% group_by %>% slice(rep(1, 9)) %>% mutate(Region=regions) %>% group_by(Region)
-      d.train <- filter(d.train, Region!="Alaska")
-      d.test <- filter(d.test, Region!="Alaska")
+      d.gbm <- d.gbm %>% group_by %>% slice(rep(1, 10)) %>% mutate(Region=regions) %>% group_by(Region)
+      #d.train <- filter(d.train, Region!="Alaska")
+      #d.test <- filter(d.test, Region!="Alaska")
     }
     d.tdd <- select(d.train, -Obs, -Year, -Cell) %>% melt(id.vars=c("Region", "SOS"), variable.name="Var", value.name="Val") %>% group_by(Region, Var)
 
@@ -253,7 +254,17 @@ extract_to_dt <- function(x, y, fun, rcp, gcm, run, ...){
     mutate(Year=rep(as.integer(substr(names(x), 2, 5)), length(names(y))),
            RCP=factor(rcp, levels=c("RCP 6.0", "RCP 8.5")),
            Model=gcm, Source="Projected") %>%
-    select(RCP, Model, Region, Year, Source, SOS, Run)
+    select(RCP, Model, Region, Year, Source, SOS, Run) %>% tbl_df()
+}
+
+extract_to_dt_all <- function(x, rcp, gcm, run){
+  yrs <- as.integer(substr(names(x), 2, 5))
+  idx <- which(!is.na(subset(x, 1)[]))
+  x <- raster::extract(x, idx)
+  data.frame(RCP=factor(rcp, levels=c("RCP 6.0", "RCP 8.5")), Model=gcm, Region="Alaska",
+             Year=yrs, Source="Projected", SOS=as.integer(round(as.numeric(colMeans(x, na.rm=TRUE)))), Run=run,
+             stringsAsFactors=FALSE) %>%
+    tbl_df()
 }
 
 d.proj <- vector("list", length(rcps)*length(gcms)*length(pred.maps[[1]][[1]]))
@@ -261,7 +272,8 @@ idx <- 1
 for(i in seq_along(rcps)){
   for(j in seq_along(gcms)){
     for(k in seq_along(pred.maps[[i]][[j]])){
-      d.proj[[idx]] <- extract_to_dt(pred.maps[[i]][[j]][[k]], eco_shp, mean, rcps[i], gcms[j], run=k, na.rm=TRUE)
+      e.ak <- extract_to_dt_all(pred.maps[[i]][[j]][[k]], rcps[i], gcms[j], run=k)
+      d.proj[[idx]] <- bind_rows(e.ak, extract_to_dt(pred.maps[[i]][[j]][[k]], eco_shp, mean, rcps[i], gcms[j], run=k, na.rm=TRUE))
       idx <- idx + 1
       print(paste("j =", j))
     }

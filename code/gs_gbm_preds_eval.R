@@ -17,11 +17,19 @@ setnames(d, c("Region", "Year", "Obs", "SOS", paste0("DOY_TDD", c("05", 10, 15, 
 #setnames(d, c("Region", "Year", "Obs", "x", "y", "SOS", paste0("DOY_TDD", c("05", 10, 15, 20)), "Elev"))
 #setnames(d, c("Region", "Year", "Obs", "x", "y", "SOS", paste0("DOY_TDD", c("05", 10, 15, 20)), "Cell", "Elev"))
 
-cells <- (d %>% group_by(Cell) %>% summarise(Region=unique(Region), n=n()) %>% filter(n==29))$Cell
+ak_only <- TRUE
+if(ak_only){
+  d$Region <- "Alaska"
+  cells <- (d %>% group_by(Cell) %>% summarise(Region="Alaska", n=n()) %>% filter(n==29))$Cell
+} else {
+  cells <- (d %>% group_by(Cell) %>% summarise(Region=unique(Region), n=n()) %>% filter(n==29))$Cell
+}
 d <- filter(d, Cell %in% cells)
-d_ak <- copy(d)
-d_ak$Region <- "Alaska"
-d <- bind_rows(d, d_ak)
+if(!ak_only){
+  d_ak <- copy(d)
+  d_ak$Region <- "Alaska"
+  d <- bind_rows(d, d_ak)
+}
 
 set.seed(564)
 n.trees <- 100#2400 #(0.5)*c(3000, 2500, 4500, 6500, 3000, 1500, 3000, 6000, 1500)
@@ -29,6 +37,11 @@ n.trees <- 100#2400 #(0.5)*c(3000, 2500, 4500, 6500, 3000, 1500, 3000, 6000, 150
 shrink <- c(0.5, c(0.03808634, 0.01393819, 0.11464891, 0.11070950, 0.04268367, 0.01483978, 0.08393778, 0.20000000, 0.06569468)) # first one is a test for AK
 frac <- c(0.1, c(rep(0.1, 5), .5, .5, .1, .5)) # first one test
 
+if(ak_only){
+  n.trees <- n.trees[1]
+  shrink <- shrink[1]
+  frac <- frac[1]
+}
 # build gbm models
 get_cv_err <- function(.){
   k <- 200
@@ -51,31 +64,17 @@ gbm_explore <- function(i, data, n.trees, shrinkage, frac, years=sort(unique(dat
   if(length(frac)==1) frac <- rep(frac, length(unique(d$Region)))
   for(j in seq_along(out)){
     if(by.year){ d <- filter(data, Year==years[j]) } else { d <- data; rm(data); gc() }
-    #d <- group_by(d, Region, Year) %>% sample_frac(frac) %>% group_by(Region)
     d <- d %>% split(.$Region) %>% purrr::map2(frac, ~group_by(.x, Year) %>% sample_frac(.y)) %>% bind_rows %>% data.table %>% group_by(Region)
-    if(agg && !by.year) d <- group_by(d, Region, Year) %>% summarise(SOS=mean(SOS),
-                                                                     DOY_TDD05=mean(DOY_TDD05),
-                                                                     DOY_TDD10=mean(DOY_TDD10),
-                                                                     DOY_TDD15=mean(DOY_TDD15),
-                                                                     DOY_TDD20=mean(DOY_TDD20)
-                                                                     ) %>% group_by(Region)
-    d.train <- sample_frac(d, 0.5)
+    if(agg && !by.year) d <- group_by(d, Region, Year) %>% summarise(SOS=mean(SOS), DOY_TDD10=mean(DOY_TDD10)) %>% group_by(Region)
+    d.train <- sample_frac(d, 0.1)
     d.test <- setdiff(d, d.train)
-    d.gbm <- d.train %>% split(.$Region) %>% purrr::map2(shrinkage, ~gbm(SOS ~
-                                                                           #DOY_TDD05 +
-                                                                           DOY_TDD10# +
-                                                                           #DOY_TDD15 +
-                                                                           #DOY_TDD20
-                                                                         , data=.x,
+    d.gbm <- d.train %>% split(.$Region) %>% purrr::map2(shrinkage, ~gbm(SOS ~ DOY_TDD10, data=.x,
       distribution="gaussian", bag.fraction=0.5, cv.folds=5, train.fraction=1,
       interaction.depth=1, n.minobsinnode=5, n.trees=n.trees, shrinkage=.y, verbose=FALSE, keep.data=FALSE, n.cores=1))
-    #print(names(d.gbm))
     d.gbm <- d.train %>% group_by %>% select(Region) %>% distinct(Region) %>% mutate(GBM1=d.gbm) %>% group_by(Region)
     regions <- d.gbm$Region
-    #print(paste("regions[1]=='Alaska':", regions[1]=="Alaska"))
-    if(regions[1]=="Alaska"){
+    if(regions[1]=="Alaska" & length(regions) > 1){
       regions <- regions[-1]
-      #print(regions)
       d.gbm <- d.gbm %>% group_by %>% slice(rep(1, 9)) %>% mutate(Region=regions) %>% group_by(Region)
       d.train <- filter(d.train, Region!="Alaska")
       d.test <- filter(d.test, Region!="Alaska")
@@ -100,16 +99,7 @@ gbm_explore <- function(i, data, n.trees, shrinkage, frac, years=sort(unique(dat
     rm(d.tdd); gc()
 
     d.test$Predicted <- unnest(d.preds)$Predicted
-    #d.bias <- d.test %>% nest(-Region) %>% group_by(Region) %>% do(Region=.$Region, Predicted=.$Predicted[[1]], Coef=purrr::map2(.$SOS, .$Predicted, ~lm(.y ~ .x)$coefficients))
-    #d.bias <- d.bias %>% do(Region=.$Region, Predicted=.$Predicted, Coef=.$Coef, `Bias corrected`=(.$Predicted-.$Coef[[1]]["(Intercept)"])/.$Coef[[1]][".x"])
-    #d.coef <- d.bias %>% select(Region, Coef) %>% unnest(Region) %>% mutate(Coef=purrr::map(.$Coef, ~data.frame(t(.x[[1]])) %>% setnames(c("intercept", "slope")))) %>% unnest
-    #d.bias <- d.bias %>% select(-Coef) %>% unnest(Region) %>% unnest
-    #d.test <- suppressMessages(left_join(d.test, d.bias, copy=T))
-    #rm(d.bias); gc()
     d.test$Run <- i
-    #d.test <- d.test %>% select(Region, Year, Run, SOS, Predicted, `Bias corrected`) %>% setnames(c("Region", "Year", "Run", "Observed", "Predicted", "Bias corrected")) %>%
-    #  melt(id.vars=c("Region", "Year", "Run"), value.name="SOS") %>% data.table %>% setnames(c("Region", "Year", "Run", "Source", "SOS")) %>%
-    #  group_by(Region, Year, Run, Source) %>% summarise(SOS=round(mean(SOS)))
     d.test <- d.test %>% select(Region, Year, Run, SOS, Predicted) %>% setnames(c("Region", "Year", "Run", "Observed", "Predicted")) %>%
       melt(id.vars=c("Region", "Year", "Run"), value.name="SOS") %>% data.table %>% setnames(c("Region", "Year", "Run", "Source", "SOS")) %>%
       group_by(Region, Year, Run, Source) %>% summarise(SOS=round(mean(SOS)))
@@ -117,9 +107,7 @@ gbm_explore <- function(i, data, n.trees, shrinkage, frac, years=sort(unique(dat
       d.coef <- mutate(d.coef, Year=years[j]) %>% select(Region, Year, intercept, slope)
       d.gbm <- mutate(d.gbm, Year=years[j]) %>% select(Region, Year, GBM1, RI, BI, CV, Error, PD)
     }
-    #out[[j]] <- list(GBM=d.gbm, data=d.test, LM=d.coef)
     out[[j]] <- list(GBM=d.gbm, data=d.test)
-    #rm(d.gbm, d.test, d.coef); gc()
     rm(d.gbm, d.test); gc()
     if(i==1 & n > 1) print(j)
   }

@@ -4,26 +4,12 @@ pkgs <- list("rasterVis", "maptools", "ggplot2", "data.table", "dplyr", "tidyr")
 dummy <- capture.output(lapply(pkgs, function(x) library(x, character.only=T)))
 
 load("data.RData") # d, d.stats, d.stats2, d.hm, sos, ecomask, yrs, cbpal
-load("final_outputs/final_gbm_summary_tables.RData") # ri.out, cv.out, pd.out, d.out, s1, sMean, sMean2002
+load("singlePred_outputs/final_gbm_summary_tables_withAK.RData") # ri.out, cv.out, pd.out, d.out, s1, sMean, sMean2002
 shpDir <- "C:/github/DataExtraction/data/shapefiles"
 eco_shp <- shapefile(file.path(shpDir, "AK_ecoregions/akecoregions.shp")) %>% spTransform(CRS(projection(sos)))
 eco_shp <- unionSpatialPolygons(eco_shp, eco_shp@data$LEVEL_2)
 sw_shp <- shapefile(file.path(shpDir, "Political/Alaska.shp")) %>% spTransform(CRS(projection(sos)))
-dir.create(plotDir <- file.path("../plots/final_outputs"), recursive=T, showWarnings=F)
-
-# @knitr tables
-library(printr)
-lab <- c("Ecoregion", "DOY TDD 5%", "DOY TDD 10%", "DOY TDD 15%", "DOY TDD 20%")
-ri.table <- ri.out %>% group_by(Region, Predictor) %>% summarise(Mean=mean(RI), SD=sd(RI)) %>%
-  mutate(`Relative Influence`=paste0(round(Mean, 1), " (",round(SD, 1), ")")) %>%
-  dcast(Region ~ Predictor, value.var="Relative Influence") %>% setnames(lab)
-#knitr::kable(ri.table, format="latex", digits=1, caption='GBM predictor relative influence')
-
-rsq.table <- filter(d.out, is.na(Run) & Source!="Bias corrected") %>% dcast(Region + Year ~ Source, value.var="SOS") %>%
-  group_by(Region) %>% summarise(`R^2`=cor(Observed, Predicted)^2) %>% setnames(c("Ecoregion", "R^2")) %>% mutate(`Area (km^2)`=table(ecomask[]))
-
-gbm.table <- left_join(ri.table, rsq.table)
-knitr::kable(gbm.table, format="latex", digits=2, caption='GBM relative influence and R2 by ecoregion')
+dir.create(plotDir <- file.path("../plots/singlePred_outputs_withAK"), recursive=T, showWarnings=F)
 
 # @knitr not_run
 
@@ -42,15 +28,19 @@ ggplot(ri.out %>% group_by(Region, Predictor) %>% summarise(RI=mean(RI)), aes(Re
 dev.off()
 
 # gbm observed vs. fitted values
+dx <- filter(d.out, is.na(Run)) %>% dcast(Region + Year + Run ~ Source, value.var="SOS")
+rng <- range(c(dx$Observed, dx$Predicted))
 png(file.path(plotDir, paste0("gbm_ObsVsFitted_byRegion.png")), width=2000, height=2000, res=200)
-ggplot(filter(d.out, is.na(Run)) %>% dcast(Region + Year + Run ~ Source, value.var="SOS"), aes(x=Predicted, y=Observed, colour=Region)) +
-  geom_point(position=position_jitter(), size=2) + geom_smooth(method="lm", se=FALSE) + scale_color_manual(values=brewer.pal(9, "Set1")) +
-  theme_bw() + theme(legend.position="bottom") + labs(title="Observed vs. fitted values", x="Predicted", y="Observed") #+
+ggplot(dx, aes(x=Predicted, y=Observed, colour=Region)) +
+  geom_point(position=position_jitter(), size=2) + geom_smooth(method="lm", se=FALSE) + scale_color_manual(values=c("black", brewer.pal(9, "Set1"))) +
+  theme_bw() + theme(legend.position="bottom") + coord_cartesian(xlim=rng, ylim=rng) +
+  labs(title="Observed vs. fitted values", x="Predicted", y="Observed") #+
 #facet_wrap(~Region, ncol=3)
 dev.off()
 
 # partial dependence
-pd <- pd.out %>% mutate(Var2=substr(Var, 1, 16)) %>% group_by(Region, Var2, Run) %>% mutate(Ymin=min(Prob)) %>% group_by(Region, Var2)
+pd <- pd.out %>% mutate(Var=as.character(Var), Var2=substr(Var, 1, 16)) %>%
+  group_by(Region, Var2, Run) %>% mutate(Ymin=min(Prob)) %>% group_by(Region, Var2)
 pd.mean <- summarise(pd, Mean_RI=round(mean(as.numeric(substr(Var, 17, nchar(Var)))), 1))
 pd <- left_join(pd, pd.mean)
 pd <- group_by(pd) %>% mutate(Var=paste0(Var2, Mean_RI)) %>% select(-Var2, -Mean_RI)
@@ -68,6 +58,14 @@ pd_merge_data <- function(x, n=1000){
   left_join(x0, x1)
 }
 
+f <- function(x, y, df){
+  x0 <- x
+  x <- x[!is.na(y)]
+  y <- y[!is.na(y)]
+  s <- smooth.spline(x, y, df=4)
+  approx(s$x, s$y, xout=x0)$y
+}
+
 pd.interp <- pd %>% split(paste(.$Region, .$Var)) %>% purrr::map(~pd_merge_data(.x)) %>% bind_rows
 pd.ci <- pd.interp %>% group_by(Region, Var, x) %>% summarise(
   n_na=length(which(is.na(y))),
@@ -79,21 +77,21 @@ pd.ci <- pd.interp %>% group_by(Region, Var, x) %>% summarise(
   y_min=ifelse(n_na > 0, NA, quantile(y, 0.025, na.rm=TRUE)),
   y_max=ifelse(n_na > 0, NA, quantile(y, 0.975, na.rm=TRUE)))
 
-f <- function(x, y, df){
-  x0 <- x
-  x <- x[!is.na(y)]
-  y <- y[!is.na(y)]
-  s <- smooth.spline(x, y, df=12)
-  approx(s$x, s$y, xout=x0)$y
-}
 
-pd.ci <- pd.ci %>% group_by(Region, Var) %>% mutate(x=ifelse(n_na > 0, NA, x), Ymin=min(Prob_mean, na.rm=TRUE), y_min=f(x,y_min), y_max=f(x,y_max))
+
+pd.ci <- pd.ci %>% group_by(Region, Var) %>%
+  mutate(x=ifelse(n_na > 0, NA, x), y_mean=ifelse(n_na > 0, NA, y_mean),
+         Ymin=min(Prob_mean, na.rm=TRUE), y_mean=f(x,y_mean), y_min=f(x,y_min), y_max=f(x,y_max)) %>% ungroup
 
 # bands
 save_pdplot <- function(x, outDir){
   region <- gsub(" ", "", unique(x$Region))
+  x <- filter(x, Var!="NANA")
+  xlm <- range(x$x, na.rm=TRUE)
+  ylm <- range(c(x$y_min, x$y_max), na.rm=TRUE)
   g <- ggplot(x, aes(x=Val)) + facet_wrap(~Var, ncol=2, scales="free") + labs(x="x", y="y")
   g <- g + geom_ribbon(aes(ymin=Ymin, ymax=Prob_mean), fill="orange") +
+    scale_x_continuous(expand=c(0,0)) + scale_y_continuous(expand=c(0,0)) +
     geom_ribbon(aes(x=x, ymin=y_min, ymax=y_max), fill="black", alpha=0.2) +
     geom_line(aes(x=x, y=y_mean), size=1) +
     geom_line(aes(x=x, y=y_min)) +
@@ -104,6 +102,11 @@ save_pdplot <- function(x, outDir){
 }
 
 pd.ci %>% split(.$Region) %>% purrr::walk(~save_pdplot(.x, outDir=plotDir))
+
+x <- tbl_df(data.frame(pd.ci)) %>%
+  select(Region, Var, density_x = Val, density_ymin = Ymin, density_ymax = Prob_mean,
+         fitted_x = x, fitted_ymean = y_mean, fitted_ymin = y_min, fitted_ymax = y_max)
+saveRDS(x, "singlePred_outputs/pd_data.rds")
 
 # spaghetti
 save_pdplot <- function(x, outDir){
@@ -119,9 +122,10 @@ pd %>% split(.$Region) %>% purrr::walk(~save_pdplot(.x, outDir=plotDir))
 
 #################################
 
-d.proj <- readRDS("final_outputs/sos_projections.rds")
+d.proj <- readRDS("singlePred_outputs/sos_projections_withAK.rds")
 d.proj.mean <- d.proj %>% group_by(Region, Year, Source) %>% summarise(SOS=mean(SOS), Run=1)
-d.smooth <- filter(d.out, is.na(Run) & Source=="Predicted") %>% bind_rows(filter(d.proj, Year > 2010)) %>% group_by(Region, Year) %>% summarise(SOS=mean(SOS), Source="Trend", Run=1)
+d.smooth <- filter(d.out, is.na(Run) & Source=="Predicted") %>% bind_rows(filter(d.proj, Year > 2010)) %>%
+  group_by(Region, Year) %>% summarise(SOS=mean(SOS), Source="Trend", Run=1)
 
 d.proj.table <- d.proj %>% filter(Year >= 1960) %>% mutate(Decade=Year - Year %% 10) %>% group_by(Region, RCP, Model, Decade) %>%
   summarise(SOS_mean=round(mean(SOS)), SOS_sd=round(sd(SOS), 1))
@@ -164,7 +168,7 @@ ggplot(filter(d.out, !is.na(Run) & Source!="Bias corrected"), aes(x=Year, y=SOS,
   geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour=clrs[2], size=1) +
   geom_line(data=filter(d.out, Source=="Observed" & is.na(Run)), colour=clrs[1], size=1) +
   geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour=clrs[2], size=1, linetype=2) +
-  geom_line(data=d.proj, colour="#00000030", size=1) +
+  geom_line(data=d.proj, aes(group=interaction(Source, Run, RCP, Model)), colour="#00000010", size=1) +
   geom_smooth(data=d.smooth) +
   theme_bw() + theme(legend.position="bottom") + ggtitle("Observed and modeled start of growing season") +
   #scale_x_continuous(breaks=c(1982,1990,2000,2010)) +

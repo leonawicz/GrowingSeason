@@ -21,8 +21,10 @@ ri.table <- ri.out %>% group_by(Region, Predictor) %>% summarise(Mean=mean(RI), 
   dcast(Region ~ Predictor, value.var="Relative Influence") %>% setnames(lab)
 #knitr::kable(ri.table, format="latex", digits=1, caption='GBM predictor relative influence')
 
+areas <- table(ecomask[])
+areas <- c(sum(areas), areas)
 rsq.table <- filter(d.out, is.na(Run) & Source!="Bias corrected") %>% dcast(Region + Year ~ Source, value.var="SOS") %>%
-  group_by(Region) %>% summarise(`R^2`=cor(Observed, Predicted)^2) %>% setnames(c("Ecoregion", "R^2")) %>% mutate(`Area (km^2)`=table(ecomask[]))
+  group_by(Region) %>% summarise(`R^2`=cor(Observed, Predicted)^2) %>% setnames(c("Ecoregion", "R^2")) %>% mutate(`Area (km^2)`=areas)
 
 gbm.table <- left_join(ri.table, rsq.table)
 knitr::kable(gbm.table, format="latex", digits=2, caption='GBM relative influence and R2 by ecoregion')
@@ -44,10 +46,12 @@ ggplot(ri.out %>% group_by(Region, Predictor) %>% summarise(RI=mean(RI)), aes(Re
 dev.off()
 
 # gbm observed vs. fitted values
+dx <- filter(d.out, is.na(Run)) %>% dcast(Region + Year + Run ~ Source, value.var="SOS")
+rng <- range(c(dx$Observed, dx$Predicted))
 png(file.path(plotDir, paste0("gbm_ObsVsFitted_byRegion.png")), width=2000, height=2000, res=200)
-ggplot(filter(d.out, is.na(Run)) %>% dcast(Region + Year + Run ~ Source, value.var="SOS"), aes(x=Predicted, y=Observed, colour=Region)) +
-  geom_point(position=position_jitter(), size=2) + geom_smooth(method="lm", se=FALSE) + scale_color_manual(values=c(brewer.pal(9, "Set1"), "black")) +
-  theme_bw() + theme(legend.position="bottom") + labs(title="Observed vs. fitted values", x="Predicted", y="Observed") #+
+ggplot(dx, aes(x=Predicted, y=Observed, colour=Region)) +
+  geom_point(position=position_jitter(), size=2) + geom_smooth(method="lm", se=FALSE) + scale_color_manual(values=c("black", brewer.pal(9, "Set1"))) +
+  theme_bw() + theme(legend.position="bottom") + coord_cartesian(xlim=rng, ylim=rng) + labs(title="Observed vs. fitted values", x="Predicted", y="Observed") #+
   #facet_wrap(~Region, ncol=3)
 dev.off()
 
@@ -195,12 +199,12 @@ ggplot(filter(d.out, !is.na(Run) & Source!="Bias corrected"), aes(x=Year, y=SOS,
   scale_color_manual(values=clrs) +
   geom_line(size=1, alpha=0.25) +
   #geom_line(data=filter(d.out, Source=="Bias corrected" & is.na(Run)), colour="#B8860B", size=1, linetype=1) +
-  geom_line(data=d.proj, colour="#00000030", size=1) +
   geom_line(data=filter(d.out, Source=="Observed" & is.na(Run)), colour="black", size=2) +
   geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour="black", size=2) +
   geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour=clrs[2], size=1) +
   geom_line(data=filter(d.out, Source=="Observed" & is.na(Run)), colour=clrs[1], size=1) +
   geom_line(data=filter(d.out, Source=="Predicted" & is.na(Run)), colour=clrs[2], size=1, linetype=2) +
+  geom_line(data=d.proj, aes(group=interaction(Source, Run, RCP, Model)), colour="#00000010", size=1) +
   geom_smooth(data=d.smooth) +
   theme_bw() + theme(legend.position="bottom") + ggtitle("Observed and modeled start of growing season") +
   #scale_x_continuous(breaks=c(1982,1990,2000,2010)) +
